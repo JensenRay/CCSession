@@ -1,16 +1,60 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import DeleteDialog from "./components/DeleteDialog.vue";
 import SessionList from "./components/SessionList.vue";
-import { SessionCommandError, listSessions } from "./api/sessions";
-import type { ListSessionsData } from "./types";
+import {
+  SessionCommandError,
+  deleteSessions,
+  listSessions,
+} from "./api/sessions";
+import type {
+  DeleteSessionsData,
+  ListSessionsData,
+  SessionDeleteReport,
+  SessionListItem,
+} from "./types";
+
+type NoticeTone = "success" | "warning" | "error";
+
+type ActionNotice = {
+  tone: NoticeTone;
+  title: string;
+  message: string;
+  details: string[];
+};
 
 const sessionsData = ref<ListSessionsData | null>(null);
 const loading = ref(false);
 const errorMessage = ref("");
+const activeDeleteIds = ref<string[]>([]);
+const deleteTargetId = ref<string | null>(null);
+const actionNotice = ref<ActionNotice | null>(null);
 
 const sessions = computed(() => sessionsData.value?.sessions ?? []);
 const total = computed(() => sessionsData.value?.total ?? 0);
 const warnings = computed(() => sessionsData.value?.warnings ?? []);
+const deleteTarget = computed<SessionListItem | null>(() => {
+  if (!deleteTargetId.value) {
+    return null;
+  }
+
+  return (
+    sessions.value.find((session) => session.id === deleteTargetId.value) ?? null
+  );
+});
+const deleteDialogItems = computed(() => {
+  if (!deleteTarget.value) {
+    return [];
+  }
+
+  return [
+    {
+      id: deleteTarget.value.id,
+      title: deleteTarget.value.title || deleteTarget.value.id,
+      summary: deleteTarget.value.summary || "No summary available.",
+    },
+  ];
+});
 const scannedAtLabel = computed(() => {
   if (!sessionsData.value?.scannedAt) {
     return "Not scanned yet";
@@ -43,6 +87,99 @@ async function refreshSessions(): Promise<void> {
     ].join("\n");
   } finally {
     loading.value = false;
+  }
+}
+
+function openDeleteDialog(sessionId: string): void {
+  deleteTargetId.value = sessionId;
+}
+
+function closeDeleteDialog(): void {
+  if (activeDeleteIds.value.length) {
+    return;
+  }
+
+  deleteTargetId.value = null;
+}
+
+function createDeleteNotice(
+  result: DeleteSessionsData,
+  report: SessionDeleteReport | undefined,
+): ActionNotice {
+  if (!report) {
+    return {
+      tone: "error",
+      title: "Delete response was incomplete",
+      message: "The backend returned no per-session report.",
+      details: result.warnings,
+    };
+  }
+
+  if (report.status === "deleted") {
+    return {
+      tone: "success",
+      title: "Session deleted",
+      message: "The session was removed and the list has been refreshed.",
+      details: result.warnings,
+    };
+  }
+
+  if (report.status === "not_found") {
+    return {
+      tone: "warning",
+      title: "Session was already missing",
+      message: "The backend reported that this session no longer exists.",
+      details: [...report.warnings, ...result.warnings],
+    };
+  }
+
+  return {
+    tone: report.status === "partial_failure" ? "warning" : "error",
+    title:
+      report.status === "partial_failure"
+        ? "Session deletion was partial"
+        : "Session deletion failed",
+    message:
+      report.error ??
+      "The backend reported that the session could not be fully deleted.",
+    details: [...report.warnings, ...result.warnings],
+  };
+}
+
+async function confirmSingleDelete(): Promise<void> {
+  if (!deleteTarget.value) {
+    return;
+  }
+
+  activeDeleteIds.value = [deleteTarget.value.id];
+  actionNotice.value = null;
+
+  try {
+    const result = await deleteSessions({
+      sessionIds: [deleteTarget.value.id],
+      requireCodexStopped: true,
+    });
+
+    actionNotice.value = createDeleteNotice(result, result.reports[0]);
+    deleteTargetId.value = null;
+    await refreshSessions();
+  } catch (error) {
+    const commandError =
+      error instanceof SessionCommandError
+        ? error
+        : new SessionCommandError(
+            "command_rejected",
+            "The delete request was rejected.",
+          );
+
+    actionNotice.value = {
+      tone: "error",
+      title: "Delete request failed",
+      message: commandError.message,
+      details: commandError.details,
+    };
+  } finally {
+    activeDeleteIds.value = [];
   }
 }
 
@@ -94,6 +231,18 @@ onMounted(() => {
       </button>
     </section>
 
+    <section
+      v-if="actionNotice"
+      class="notice-panel"
+      :class="`notice-panel--${actionNotice.tone}`"
+    >
+      <h2 class="notice-panel__title">{{ actionNotice.title }}</h2>
+      <p class="notice-panel__message">{{ actionNotice.message }}</p>
+      <ul v-if="actionNotice.details.length" class="notice-panel__list">
+        <li v-for="detail in actionNotice.details" :key="detail">{{ detail }}</li>
+      </ul>
+    </section>
+
     <section v-if="warnings.length" class="notice-panel notice-panel--warning">
       <h2 class="notice-panel__title">Warnings</h2>
       <ul class="notice-panel__list">
@@ -127,7 +276,24 @@ onMounted(() => {
       </p>
     </section>
 
-    <SessionList v-else :sessions="sessions" />
+    <SessionList
+      v-else
+      :sessions="sessions"
+      :active-delete-ids="activeDeleteIds"
+      :delete-disabled="Boolean(activeDeleteIds.length)"
+      @request-delete="openDeleteDialog"
+    />
+
+    <DeleteDialog
+      :open="Boolean(deleteTarget)"
+      title="Delete this session?"
+      description="This operation follows the backend deletion contract and may remove thread state, history rows, logs, rollout files, and shell snapshots for the selected session."
+      :items="deleteDialogItems"
+      confirm-label="Delete Session"
+      :busy="Boolean(activeDeleteIds.length)"
+      @close="closeDeleteDialog"
+      @confirm="confirmSingleDelete"
+    />
   </main>
 </template>
 
@@ -294,6 +460,11 @@ onMounted(() => {
 .notice-panel--warning {
   border-color: rgba(159, 112, 0, 0.22);
   background: rgba(255, 247, 226, 0.9);
+}
+
+.notice-panel--success {
+  border-color: rgba(49, 93, 60, 0.16);
+  background: rgba(235, 248, 238, 0.88);
 }
 
 .notice-panel--error {

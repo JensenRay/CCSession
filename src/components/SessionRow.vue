@@ -4,6 +4,12 @@ import type { SessionListItem } from "../types";
 
 const props = defineProps<{
   session: SessionListItem;
+  deleteDisabled?: boolean;
+  isDeleting?: boolean;
+}>();
+
+const emit = defineEmits<{
+  (event: "request-delete", sessionId: string): void;
 }>();
 
 const updatedAtLabel = computed(() => formatTimestamp(props.session.updatedAt));
@@ -32,14 +38,25 @@ function formatCount(value: number): string {
         <p class="session-row__eyebrow">Session</p>
         <h3 class="session-row__title">{{ title }}</h3>
       </div>
-      <div class="session-row__badges">
-        <span v-if="session.archived" class="session-row__badge">Archived</span>
-        <span class="session-row__status" :data-available="session.hasRollout">
-          {{ session.hasRollout ? "Rollout ready" : "Rollout missing" }}
-        </span>
-        <span class="session-row__status" :data-available="session.hasSnapshot">
-          {{ session.hasSnapshot ? "Snapshot ready" : "Snapshot missing" }}
-        </span>
+      <div class="session-row__header-actions">
+        <div class="session-row__badges">
+          <span v-if="session.archived" class="session-row__badge">Archived</span>
+          <span class="session-row__status" :data-available="session.hasRollout">
+            {{ session.hasRollout ? "Rollout ready" : "Rollout missing" }}
+          </span>
+          <span class="session-row__status" :data-available="session.hasSnapshot">
+            {{ session.hasSnapshot ? "Snapshot ready" : "Snapshot missing" }}
+          </span>
+        </div>
+
+        <button
+          class="session-row__delete-button"
+          type="button"
+          :disabled="deleteDisabled"
+          @click="emit('request-delete', session.id)"
+        >
+          {{ isDeleting ? "Deleting..." : "Delete" }}
+        </button>
       </div>
     </header>
 
@@ -142,6 +159,27 @@ function formatCount(value: number): string {
   justify-content: flex-end;
 }
 
+.session-row__header-actions {
+  display: grid;
+  justify-items: end;
+  gap: 0.75rem;
+}
+
+.session-row__delete-button {
+  min-height: 2.5rem;
+  padding: 0 0.95rem;
+  border: none;
+  border-radius: 999px;
+  background: rgba(139, 61, 39, 0.1);
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.session-row__delete-button:disabled {
+  opacity: 0.64;
+  cursor: wait;
+}
+
 .session-row__badge,
 .session-row__status {
   display: inline-flex;
@@ -235,6 +273,10 @@ function formatCount(value: number): string {
 
   .session-row__badges {
     justify-content: flex-start;
+  }
+
+  .session-row__header-actions {
+    justify-items: start;
   }
 }
 </style>
