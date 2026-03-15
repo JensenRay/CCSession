@@ -21,39 +21,75 @@ type ActionNotice = {
   title: string;
   message: string;
   details: string[];
+  reports: SessionDeleteReport[];
 };
 
 const sessionsData = ref<ListSessionsData | null>(null);
 const loading = ref(false);
 const errorMessage = ref("");
 const activeDeleteIds = ref<string[]>([]);
-const deleteTargetId = ref<string | null>(null);
+const pendingDeleteIds = ref<string[]>([]);
+const selectedIds = ref<string[]>([]);
 const actionNotice = ref<ActionNotice | null>(null);
 
 const sessions = computed(() => sessionsData.value?.sessions ?? []);
 const total = computed(() => sessionsData.value?.total ?? 0);
 const warnings = computed(() => sessionsData.value?.warnings ?? []);
-const deleteTarget = computed<SessionListItem | null>(() => {
-  if (!deleteTargetId.value) {
-    return null;
-  }
-
-  return (
-    sessions.value.find((session) => session.id === deleteTargetId.value) ?? null
-  );
-});
+const selectedCount = computed(() => selectedIds.value.length);
+const allSelected = computed(
+  () =>
+    sessions.value.length > 0 &&
+    selectedIds.value.length === sessions.value.length,
+);
+const pendingDeleteSessions = computed<SessionListItem[]>(() =>
+  pendingDeleteIds.value
+    .map((sessionId) =>
+      sessions.value.find((session) => session.id === sessionId),
+    )
+    .filter((session): session is SessionListItem => Boolean(session)),
+);
 const deleteDialogItems = computed(() => {
-  if (!deleteTarget.value) {
-    return [];
+  return pendingDeleteSessions.value.map((session) => ({
+    id: session.id,
+    title: session.title || session.id,
+    summary: session.summary || "No summary available.",
+  }));
+});
+const deleteDialogTitle = computed(() =>
+  pendingDeleteSessions.value.length > 1
+    ? `Delete ${pendingDeleteSessions.value.length} sessions?`
+    : "Delete this session?",
+);
+const deleteDialogDescription = computed(() =>
+  pendingDeleteSessions.value.length > 1
+    ? "This batch delete request follows the backend contract and will ask the backend to remove each selected session plus its related history, logs, rollout file, and shell snapshot."
+    : "This operation follows the backend deletion contract and may remove thread state, history rows, logs, rollout files, and shell snapshots for the selected session.",
+);
+const deleteDialogConfirmLabel = computed(() =>
+  pendingDeleteSessions.value.length > 1 ? "Delete Selected" : "Delete Session",
+);
+const canBulkDelete = computed(
+  () =>
+    selectedIds.value.length > 0 &&
+    !loading.value &&
+    activeDeleteIds.value.length === 0,
+);
+const isDeleting = computed(() => activeDeleteIds.value.length > 0);
+const summaryReports = computed(
+  () =>
+    actionNotice.value?.reports.filter(
+      (report) =>
+        report.status !== "deleted" ||
+        report.warnings.length > 0 ||
+        Boolean(report.error),
+    ) ?? [],
+);
+const selectedSummaryLabel = computed(() => {
+  if (!selectedIds.value.length) {
+    return "No sessions selected";
   }
 
-  return [
-    {
-      id: deleteTarget.value.id,
-      title: deleteTarget.value.title || deleteTarget.value.id,
-      summary: deleteTarget.value.summary || "No summary available.",
-    },
-  ];
+  return `${selectedIds.value.length} selected`;
 });
 const scannedAtLabel = computed(() => {
   if (!sessionsData.value?.scannedAt) {
@@ -71,7 +107,13 @@ async function refreshSessions(): Promise<void> {
   errorMessage.value = "";
 
   try {
-    sessionsData.value = await listSessions();
+    const nextData = await listSessions();
+    const sessionIds = new Set(nextData.sessions.map((session) => session.id));
+
+    sessionsData.value = nextData;
+    selectedIds.value = selectedIds.value.filter((sessionId) =>
+      sessionIds.has(sessionId),
+    );
   } catch (error) {
     const commandError =
       error instanceof SessionCommandError
@@ -90,8 +132,40 @@ async function refreshSessions(): Promise<void> {
   }
 }
 
-function openDeleteDialog(sessionId: string): void {
-  deleteTargetId.value = sessionId;
+function toggleSessionSelection(sessionId: string): void {
+  const nextSelection = new Set(selectedIds.value);
+
+  if (nextSelection.has(sessionId)) {
+    nextSelection.delete(sessionId);
+  } else {
+    nextSelection.add(sessionId);
+  }
+
+  selectedIds.value = sessions.value
+    .map((session) => session.id)
+    .filter((id) => nextSelection.has(id));
+}
+
+function toggleAllSelection(): void {
+  selectedIds.value = allSelected.value
+    ? []
+    : sessions.value.map((session) => session.id);
+}
+
+function openDeleteDialog(sessionIds: string[]): void {
+  if (!sessionIds.length) {
+    return;
+  }
+
+  pendingDeleteIds.value = sessionIds;
+}
+
+function openSingleDeleteDialog(sessionId: string): void {
+  openDeleteDialog([sessionId]);
+}
+
+function openBatchDeleteDialog(): void {
+  openDeleteDialog(selectedIds.value);
 }
 
 function closeDeleteDialog(): void {
@@ -99,69 +173,57 @@ function closeDeleteDialog(): void {
     return;
   }
 
-  deleteTargetId.value = null;
+  pendingDeleteIds.value = [];
 }
 
-function createDeleteNotice(
-  result: DeleteSessionsData,
-  report: SessionDeleteReport | undefined,
-): ActionNotice {
-  if (!report) {
-    return {
-      tone: "error",
-      title: "Delete response was incomplete",
-      message: "The backend returned no per-session report.",
-      details: result.warnings,
-    };
-  }
-
-  if (report.status === "deleted") {
-    return {
-      tone: "success",
-      title: "Session deleted",
-      message: "The session was removed and the list has been refreshed.",
-      details: result.warnings,
-    };
-  }
-
-  if (report.status === "not_found") {
-    return {
-      tone: "warning",
-      title: "Session was already missing",
-      message: "The backend reported that this session no longer exists.",
-      details: [...report.warnings, ...result.warnings],
-    };
-  }
+function createDeleteNotice(result: DeleteSessionsData): ActionNotice {
+  const tone: NoticeTone =
+    result.failedCount > 0
+      ? "error"
+      : result.partialFailureCount > 0 || result.notFoundCount > 0
+        ? "warning"
+        : "success";
+  const title =
+    result.requestedCount > 1
+      ? "Batch delete finished"
+      : tone === "success"
+        ? "Session deleted"
+        : tone === "warning"
+          ? "Session deletion needs review"
+          : "Session deletion failed";
 
   return {
-    tone: report.status === "partial_failure" ? "warning" : "error",
-    title:
-      report.status === "partial_failure"
-        ? "Session deletion was partial"
-        : "Session deletion failed",
-    message:
-      report.error ??
-      "The backend reported that the session could not be fully deleted.",
-    details: [...report.warnings, ...result.warnings],
+    tone,
+    title,
+    message: [
+      `Requested ${result.requestedCount}.`,
+      `Deleted ${result.deletedCount}.`,
+      `Partial ${result.partialFailureCount}.`,
+      `Failed ${result.failedCount}.`,
+      `Missing ${result.notFoundCount}.`,
+    ].join(" "),
+    details: result.warnings,
+    reports: result.reports,
   };
 }
 
-async function confirmSingleDelete(): Promise<void> {
-  if (!deleteTarget.value) {
+async function confirmDelete(): Promise<void> {
+  if (!pendingDeleteIds.value.length) {
     return;
   }
 
-  activeDeleteIds.value = [deleteTarget.value.id];
+  activeDeleteIds.value = [...pendingDeleteIds.value];
   actionNotice.value = null;
 
   try {
     const result = await deleteSessions({
-      sessionIds: [deleteTarget.value.id],
+      sessionIds: pendingDeleteIds.value,
       requireCodexStopped: true,
     });
 
-    actionNotice.value = createDeleteNotice(result, result.reports[0]);
-    deleteTargetId.value = null;
+    actionNotice.value = createDeleteNotice(result);
+    pendingDeleteIds.value = [];
+    selectedIds.value = [];
     await refreshSessions();
   } catch (error) {
     const commandError =
@@ -177,6 +239,7 @@ async function confirmSingleDelete(): Promise<void> {
       title: "Delete request failed",
       message: commandError.message,
       details: commandError.details,
+      reports: [],
     };
   } finally {
     activeDeleteIds.value = [];
@@ -226,9 +289,20 @@ onMounted(() => {
         </p>
       </div>
 
-      <button class="toolbar__button" type="button" :disabled="loading" @click="refreshSessions">
-        {{ loading ? "Refreshing..." : "Refresh" }}
-      </button>
+      <div class="toolbar__actions">
+        <span class="toolbar__selection">{{ selectedSummaryLabel }}</span>
+        <button
+          class="toolbar__button toolbar__button--danger"
+          type="button"
+          :disabled="!canBulkDelete"
+          @click="openBatchDeleteDialog"
+        >
+          Delete Selected
+        </button>
+        <button class="toolbar__button" type="button" :disabled="loading" @click="refreshSessions">
+          {{ loading ? "Refreshing..." : "Refresh" }}
+        </button>
+      </div>
     </section>
 
     <section
@@ -240,6 +314,14 @@ onMounted(() => {
       <p class="notice-panel__message">{{ actionNotice.message }}</p>
       <ul v-if="actionNotice.details.length" class="notice-panel__list">
         <li v-for="detail in actionNotice.details" :key="detail">{{ detail }}</li>
+      </ul>
+      <ul v-if="summaryReports.length" class="notice-panel__report-list">
+        <li v-for="report in summaryReports" :key="report.sessionId" class="notice-panel__report-item">
+          <strong>{{ report.sessionId }}</strong>
+          <span>{{ report.status }}</span>
+          <p v-if="report.error">{{ report.error }}</p>
+          <p v-else-if="report.warnings.length">{{ report.warnings.join(" / ") }}</p>
+        </li>
       </ul>
     </section>
 
@@ -279,20 +361,24 @@ onMounted(() => {
     <SessionList
       v-else
       :sessions="sessions"
+      :selected-ids="selectedIds"
       :active-delete-ids="activeDeleteIds"
-      :delete-disabled="Boolean(activeDeleteIds.length)"
-      @request-delete="openDeleteDialog"
+      :selection-disabled="isDeleting"
+      :delete-disabled="isDeleting"
+      @toggle-all="toggleAllSelection"
+      @toggle-select="toggleSessionSelection"
+      @request-delete="openSingleDeleteDialog"
     />
 
     <DeleteDialog
-      :open="Boolean(deleteTarget)"
-      title="Delete this session?"
-      description="This operation follows the backend deletion contract and may remove thread state, history rows, logs, rollout files, and shell snapshots for the selected session."
+      :open="Boolean(pendingDeleteIds.length)"
+      :title="deleteDialogTitle"
+      :description="deleteDialogDescription"
       :items="deleteDialogItems"
-      confirm-label="Delete Session"
-      :busy="Boolean(activeDeleteIds.length)"
+      :confirm-label="deleteDialogConfirmLabel"
+      :busy="isDeleting"
       @close="closeDeleteDialog"
-      @confirm="confirmSingleDelete"
+      @confirm="confirmDelete"
     />
   </main>
 </template>
@@ -404,6 +490,14 @@ onMounted(() => {
   gap: 0.35rem;
 }
 
+.toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  align-items: center;
+}
+
 .toolbar__title {
   margin: 0;
   color: var(--heading);
@@ -415,6 +509,17 @@ onMounted(() => {
   margin: 0;
   color: var(--text-muted);
   line-height: 1.6;
+}
+
+.toolbar__selection {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.6rem;
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  background: rgba(105, 74, 48, 0.08);
+  color: var(--heading);
+  font-weight: 700;
 }
 
 .toolbar__button,
@@ -443,6 +548,10 @@ onMounted(() => {
   cursor: wait;
   transform: none;
   box-shadow: none;
+}
+
+.toolbar__button--danger {
+  background: linear-gradient(135deg, var(--danger), #a3472f);
 }
 
 .notice-panel,
@@ -482,6 +591,43 @@ onMounted(() => {
   margin: 0.8rem 0 0;
   padding-left: 1.1rem;
   color: var(--text-soft);
+}
+
+.notice-panel__report-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notice-panel__report-item {
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(105, 74, 48, 0.1);
+}
+
+.notice-panel__report-item strong,
+.notice-panel__report-item span,
+.notice-panel__report-item p {
+  display: block;
+}
+
+.notice-panel__report-item strong {
+  color: var(--heading);
+}
+
+.notice-panel__report-item span {
+  margin-top: 0.35rem;
+  color: var(--accent-strong);
+  text-transform: capitalize;
+}
+
+.notice-panel__report-item p {
+  margin: 0.45rem 0 0;
+  color: var(--text-soft);
+  line-height: 1.6;
 }
 
 .notice-panel__message,
@@ -537,6 +683,10 @@ onMounted(() => {
   .toolbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .toolbar__actions {
+    justify-content: stretch;
   }
 }
 </style>

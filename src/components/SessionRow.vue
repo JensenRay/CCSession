@@ -4,11 +4,14 @@ import type { SessionListItem } from "../types";
 
 const props = defineProps<{
   session: SessionListItem;
+  selected?: boolean;
+  selectionDisabled?: boolean;
   deleteDisabled?: boolean;
   isDeleting?: boolean;
 }>();
 
 const emit = defineEmits<{
+  (event: "toggle-select", sessionId: string): void;
   (event: "request-delete", sessionId: string): void;
 }>();
 
@@ -34,9 +37,21 @@ function formatCount(value: number): string {
 <template>
   <article class="session-row">
     <header class="session-row__header">
-      <div class="session-row__title-group">
-        <p class="session-row__eyebrow">Session</p>
-        <h3 class="session-row__title">{{ title }}</h3>
+      <div class="session-row__leading">
+        <label class="session-row__checkbox">
+          <input
+            type="checkbox"
+            :checked="selected"
+            :disabled="selectionDisabled"
+            @change="emit('toggle-select', session.id)"
+          />
+          <span>Select</span>
+        </label>
+
+        <div class="session-row__title-group">
+          <p class="session-row__eyebrow">Session</p>
+          <h3 class="session-row__title">{{ title }}</h3>
+        </div>
       </div>
       <div class="session-row__header-actions">
         <div class="session-row__badges">
@@ -133,6 +148,19 @@ function formatCount(value: number): string {
 .session-row__title-group {
   display: grid;
   gap: 0.35rem;
+}
+
+.session-row__leading {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.session-row__checkbox {
+  display: inline-flex;
+  gap: 0.6rem;
+  align-items: center;
+  color: var(--text-muted);
+  font-weight: 700;
 }
 
 .session-row__eyebrow {
@@ -269,6 +297,10 @@ function formatCount(value: number): string {
 
   .session-row__header {
     flex-direction: column;
+  }
+
+  .session-row__leading {
+    width: 100%;
   }
 
   .session-row__badges {
