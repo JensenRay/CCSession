@@ -8,6 +8,15 @@ mod session_list;
 #[cfg(test)]
 mod test_support;
 
+type ListSessionsCommand =
+    fn(models::ListSessionsRequest) -> models::ApiResponse<models::ListSessionsData>;
+type DeleteSessionsCommand =
+    fn(models::DeleteSessionsRequest) -> models::ApiResponse<models::DeleteSessionsData>;
+
+// Keep rust-analyzer aware that these command functions are used via Tauri's macro registration.
+const _: ListSessionsCommand = commands::list_sessions;
+const _: DeleteSessionsCommand = commands::delete_sessions;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[cfg(not(test))]
 pub fn run() {
