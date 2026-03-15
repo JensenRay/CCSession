@@ -151,7 +151,7 @@ pub(crate) fn open_state_db_read_write(paths: &CodexPaths) -> Result<Connection,
     })
 }
 
-pub(crate) fn load_threads(
+fn load_threads(
     connection: &Connection,
     include_archived: bool,
 ) -> Result<Vec<ThreadRow>, ApiError> {
