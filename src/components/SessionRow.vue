@@ -5,310 +5,257 @@ import type { SessionListItem } from "../types";
 const props = defineProps<{
   session: SessionListItem;
   selected?: boolean;
+  isActive?: boolean;
   selectionDisabled?: boolean;
-  deleteDisabled?: boolean;
-  isDeleting?: boolean;
 }>();
 
 const emit = defineEmits<{
   (event: "toggle-select", sessionId: string): void;
-  (event: "request-delete", sessionId: string): void;
+  (event: "open-session", sessionId: string): void;
 }>();
 
 const updatedAtLabel = computed(() => formatTimestamp(props.session.updatedAt));
-const createdAtLabel = computed(() => formatTimestamp(props.session.createdAt));
 const title = computed(() => props.session.title.trim() || props.session.id);
 const summary = computed(
   () => props.session.summary.trim() || "No summary available.",
 );
+const previewLine = computed(
+  () =>
+    props.session.contentPreview[props.session.contentPreview.length - 1]?.trim() ||
+    "",
+);
+const condensedPath = computed(() => compactPath(props.session.cwd));
+const stateLabel = computed(() => {
+  if (!props.session.hasRollout || !props.session.hasSnapshot) {
+    return "Needs review";
+  }
+
+  if (props.session.archived) {
+    return "Archived";
+  }
+
+  return "Ready";
+});
 
 function formatTimestamp(timestamp: number): string {
   return new Intl.DateTimeFormat("zh-CN", {
-    dateStyle: "medium",
-    timeStyle: "short",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(timestamp * 1000);
 }
 
 function formatCount(value: number): string {
-  return new Intl.NumberFormat("en-US").format(value);
+  return new Intl.NumberFormat("en-US", {
+    notation: value > 999 ? "compact" : "standard",
+  }).format(value);
+}
+
+function compactPath(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  const segments = normalized.split("/").filter(Boolean);
+
+  if (segments.length <= 2) {
+    return path;
+  }
+
+  return `…/${segments.slice(-2).join("/")}`;
 }
 </script>
 
 <template>
-  <article class="session-row">
-    <header class="session-row__header">
-      <div class="session-row__leading">
-        <label class="session-row__checkbox">
-          <input
-            type="checkbox"
-            :checked="selected"
-            :disabled="selectionDisabled"
-            @change="emit('toggle-select', session.id)"
-          />
-          <span>Select</span>
-        </label>
+  <article
+    class="session-card"
+    :data-active="isActive"
+    :data-selected="selected"
+  >
+    <div class="session-card__top">
+      <label class="session-card__checkbox">
+        <input
+          type="checkbox"
+          :checked="selected"
+          :disabled="selectionDisabled"
+          @change="emit('toggle-select', session.id)"
+        />
+        <span>Batch</span>
+      </label>
 
-        <div class="session-row__title-group">
-          <p class="session-row__eyebrow">Session</p>
-          <h3 class="session-row__title">{{ title }}</h3>
+      <div class="session-card__status">
+        <span class="session-card__status-dot"></span>
+        <span>{{ stateLabel }}</span>
+      </div>
+    </div>
+
+    <button
+      class="session-card__surface"
+      type="button"
+      :aria-pressed="isActive"
+      @click="emit('open-session', session.id)"
+    >
+      <div class="session-card__title-row">
+        <h3 class="session-card__title">{{ title }}</h3>
+        <span class="session-card__updated">{{ updatedAtLabel }}</span>
+      </div>
+
+      <p class="session-card__summary">{{ summary }}</p>
+      <p v-if="previewLine" class="session-card__preview">{{ previewLine }}</p>
+
+      <div class="session-card__footer">
+        <span class="session-card__path">{{ condensedPath }}</span>
+        <div class="session-card__metrics">
+          <span>{{ formatCount(session.historyCount) }} history</span>
+          <span>{{ formatCount(session.tokensUsed) }} tok</span>
         </div>
       </div>
-      <div class="session-row__header-actions">
-        <div class="session-row__badges">
-          <span v-if="session.archived" class="session-row__badge">Archived</span>
-          <span class="session-row__status" :data-available="session.hasRollout">
-            {{ session.hasRollout ? "Rollout ready" : "Rollout missing" }}
-          </span>
-          <span class="session-row__status" :data-available="session.hasSnapshot">
-            {{ session.hasSnapshot ? "Snapshot ready" : "Snapshot missing" }}
-          </span>
-        </div>
-
-        <button
-          class="session-row__delete-button"
-          type="button"
-          :disabled="deleteDisabled"
-          @click="emit('request-delete', session.id)"
-        >
-          {{ isDeleting ? "Deleting..." : "Delete" }}
-        </button>
-      </div>
-    </header>
-
-    <p class="session-row__summary">{{ summary }}</p>
-
-    <ul v-if="session.contentPreview.length" class="session-row__preview-list">
-      <li v-for="item in session.contentPreview" :key="item" class="session-row__preview-item">
-        {{ item }}
-      </li>
-    </ul>
-    <p v-else class="session-row__preview-empty">No preview messages were returned.</p>
-
-    <dl class="session-row__meta-grid">
-      <div class="session-row__meta-item">
-        <dt>ID</dt>
-        <dd>{{ session.id }}</dd>
-      </div>
-      <div class="session-row__meta-item">
-        <dt>Project</dt>
-        <dd>{{ session.cwd }}</dd>
-      </div>
-      <div class="session-row__meta-item">
-        <dt>Updated</dt>
-        <dd>{{ updatedAtLabel }}</dd>
-      </div>
-      <div class="session-row__meta-item">
-        <dt>Created</dt>
-        <dd>{{ createdAtLabel }}</dd>
-      </div>
-      <div class="session-row__meta-item">
-        <dt>Provider</dt>
-        <dd>{{ session.modelProvider || "Unknown" }}</dd>
-      </div>
-      <div class="session-row__meta-item">
-        <dt>Source</dt>
-        <dd>{{ session.source || "Unknown" }}</dd>
-      </div>
-      <div class="session-row__meta-item">
-        <dt>Tokens</dt>
-        <dd>{{ formatCount(session.tokensUsed) }}</dd>
-      </div>
-      <div class="session-row__meta-item">
-        <dt>History</dt>
-        <dd>{{ formatCount(session.historyCount) }}</dd>
-      </div>
-      <div class="session-row__meta-item">
-        <dt>Structured logs</dt>
-        <dd>{{ formatCount(session.structuredLogCount) }}</dd>
-      </div>
-    </dl>
+    </button>
   </article>
 </template>
 
 <style scoped>
-.session-row {
-  display: grid;
-  gap: 1rem;
-  padding: 1.25rem;
-  border: 1px solid rgba(105, 74, 48, 0.12);
-  border-radius: 1rem;
-  background:
-    linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(247, 240, 232, 0.94)),
-    var(--panel);
-  box-shadow: 0 14px 40px rgba(61, 45, 31, 0.08);
-}
-
-.session-row__header {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: flex-start;
-}
-
-.session-row__title-group {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.session-row__leading {
+.session-card {
   display: grid;
   gap: 0.85rem;
+  padding: 0.95rem;
+  border-radius: 1.2rem;
+  border: 1px solid rgba(112, 193, 174, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background 150ms ease;
 }
 
-.session-row__checkbox {
+.session-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(55, 193, 218, 0.26);
+  box-shadow: 0 16px 30px rgba(1, 8, 6, 0.2);
+}
+
+.session-card[data-active="true"] {
+  border-color: rgba(255, 201, 71, 0.42);
+  background: linear-gradient(180deg, rgba(37, 47, 18, 0.46), rgba(17, 34, 28, 0.72));
+  box-shadow: 0 18px 36px rgba(255, 201, 71, 0.08);
+}
+
+.session-card[data-selected="true"] {
+  background: linear-gradient(180deg, rgba(13, 41, 36, 0.84), rgba(7, 25, 21, 0.94));
+}
+
+.session-card__top,
+.session-card__title-row,
+.session-card__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.session-card__checkbox {
   display: inline-flex;
-  gap: 0.6rem;
+  gap: 0.55rem;
   align-items: center;
   color: var(--text-muted);
   font-weight: 700;
 }
 
-.session-row__eyebrow {
-  margin: 0;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--accent);
+.session-card__status {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+  color: var(--text-soft);
+  font-size: 0.82rem;
 }
 
-.session-row__title {
+.session-card__status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 0.22rem rgba(255, 201, 71, 0.12);
+}
+
+.session-card__surface {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+}
+
+.session-card__title {
   margin: 0;
   color: var(--heading);
-  font-size: 1.15rem;
-  line-height: 1.4;
-  word-break: break-word;
+  font-size: 1rem;
+  line-height: 1.45;
 }
 
-.session-row__badges {
+.session-card__updated,
+.session-card__path {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.session-card__summary,
+.session-card__preview {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.65;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+}
+
+.session-card__summary {
+  -webkit-line-clamp: 2;
+}
+
+.session-card__preview {
+  padding: 0.75rem 0.8rem;
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(112, 193, 174, 0.1);
+  -webkit-line-clamp: 2;
+}
+
+.session-card__footer {
+  align-items: flex-end;
+}
+
+.session-card__path {
+  max-width: 52%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-card__metrics {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.55rem;
   justify-content: flex-end;
-}
-
-.session-row__header-actions {
-  display: grid;
-  justify-items: end;
-  gap: 0.75rem;
-}
-
-.session-row__delete-button {
-  min-height: 2.5rem;
-  padding: 0 0.95rem;
-  border: none;
-  border-radius: 999px;
-  background: rgba(139, 61, 39, 0.1);
-  color: var(--danger);
-  font-weight: 700;
-}
-
-.session-row__delete-button:disabled {
-  opacity: 0.64;
-  cursor: wait;
-}
-
-.session-row__badge,
-.session-row__status {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2rem;
-  padding: 0 0.75rem;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.session-row__badge {
-  background: rgba(159, 112, 0, 0.14);
-  color: #805300;
-}
-
-.session-row__status {
-  background: rgba(67, 98, 74, 0.1);
-  color: #315d3c;
-}
-
-.session-row__status[data-available="false"] {
-  background: rgba(132, 56, 37, 0.12);
-  color: #8c3b28;
-}
-
-.session-row__summary {
-  margin: 0;
-  color: var(--text);
-  font-size: 0.98rem;
-  line-height: 1.7;
-}
-
-.session-row__preview-list {
-  display: grid;
-  gap: 0.65rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.session-row__preview-item,
-.session-row__preview-empty {
-  margin: 0;
-  padding: 0.85rem 0.95rem;
-  border-radius: 0.85rem;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(105, 74, 48, 0.12);
-  color: var(--text-soft);
-  line-height: 1.6;
-}
-
-.session-row__meta-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.9rem;
-  margin: 0;
-}
-
-.session-row__meta-item {
-  min-width: 0;
-  padding: 0.95rem;
-  border-radius: 0.85rem;
-  background: rgba(121, 92, 62, 0.06);
-}
-
-.session-row__meta-item dt {
-  margin: 0 0 0.4rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-}
-
-.session-row__meta-item dd {
-  margin: 0;
   color: var(--heading);
-  line-height: 1.6;
-  word-break: break-word;
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
-@media (max-width: 680px) {
-  .session-row {
-    padding: 1rem;
-  }
-
-  .session-row__header {
+@media (max-width: 720px) {
+  .session-card__title-row,
+  .session-card__footer {
     flex-direction: column;
+    align-items: flex-start;
   }
 
-  .session-row__leading {
-    width: 100%;
+  .session-card__path {
+    max-width: 100%;
   }
 
-  .session-row__badges {
+  .session-card__metrics {
     justify-content: flex-start;
-  }
-
-  .session-row__header-actions {
-    justify-items: start;
   }
 }
 </style>

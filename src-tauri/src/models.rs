@@ -39,7 +39,6 @@ pub enum ApiErrorCode {
     LogsDbOpenFailed,
     HistoryFileReadFailed,
     HistoryFileWriteFailed,
-    PathValidationFailed,
     CodexRunningDetected,
     InvalidInput,
     DeleteExecutionFailed,

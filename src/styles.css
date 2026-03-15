@@ -1,24 +1,26 @@
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   font-family:
     "Avenir Next",
+    "Trebuchet MS",
     "PingFang SC",
     "Microsoft YaHei",
     sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  --bg: #f3ede3;
-  --bg-strong: #ead8c0;
-  --panel: #fbf7f0;
-  --panel-strong: #fffdf9;
-  --border: rgba(105, 74, 48, 0.14);
-  --heading: #2f2117;
-  --text: #5a4331;
-  --text-soft: #6a5443;
-  --text-muted: #8b715d;
-  --accent: #b2602b;
-  --accent-strong: #8a4218;
-  --danger: #8b3d27;
+  --bg: #06110c;
+  --bg-strong: #0a1b15;
+  --panel: #0d2119;
+  --panel-strong: #15332a;
+  --border: rgba(112, 193, 174, 0.18);
+  --heading: #f8f6df;
+  --text: #d4dfd8;
+  --text-soft: #a9c0b5;
+  --text-muted: #7f9c91;
+  --accent: #ffc947;
+  --accent-strong: #d19c20;
+  --accent-soft: #37c1da;
+  --danger: #ff7b5c;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -39,8 +41,9 @@ body {
   margin: 0;
   min-width: 320px;
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.75), transparent 30%),
-    linear-gradient(160deg, #f0e1ce 0%, #f6efe6 36%, #f2e8db 100%);
+    radial-gradient(circle at top left, rgba(55, 193, 218, 0.12), transparent 28%),
+    radial-gradient(circle at top right, rgba(255, 201, 71, 0.12), transparent 24%),
+    linear-gradient(180deg, #07120d 0%, #0a1812 42%, #09110f 100%);
   color: var(--text);
 }
 
@@ -53,4 +56,14 @@ select {
 
 button {
   cursor: pointer;
+}
+
+button,
+input {
+  accent-color: var(--accent);
+}
+
+::selection {
+  background: rgba(255, 201, 71, 0.28);
+  color: var(--heading);
 }

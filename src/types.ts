@@ -5,7 +5,6 @@ export type ApiErrorCode =
   | "logs_db_open_failed"
   | "history_file_read_failed"
   | "history_file_write_failed"
-  | "path_validation_failed"
   | "codex_running_detected"
   | "invalid_input"
   | "delete_execution_failed";
