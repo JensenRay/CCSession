@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { SessionCommandError, sessionPrompts } from "../api/sessions";
 import SessionDetail from "../components/SessionDetail.vue";
 import StatePanel from "../components/StatePanel.vue";
+import { useSessionPrompts } from "../composables/useSessionPrompts";
 import { useSessionStore } from "../composables/useSessionStore";
 
 const route = useRoute();
@@ -12,6 +12,7 @@ const store = useSessionStore();
 
 const sessionId = computed(() => String(route.params.sessionId ?? ""));
 const session = computed(() => store.getSessionById(sessionId.value));
+const previewEntries = computed(() => session.value?.contentPreview ?? []);
 const selected = computed(() => {
   const currentSession = session.value;
   return currentSession ? store.selectedIds.includes(currentSession.id) : false;
@@ -22,14 +23,12 @@ const isDeletingCurrent = computed(() => {
     ? store.activeDeleteIds.includes(currentSession.id)
     : false;
 });
-const promptEntries = ref<string[]>([]);
-const promptEntriesLoading = ref(false);
-const promptEntriesError = ref("");
-const promptEntriesWarnings = ref<string[]>([]);
-
-const resolvedPromptEntries = computed(() =>
-  promptEntries.value.length ? promptEntries.value : session.value?.contentPreview ?? [],
-);
+const {
+  promptEntries,
+  promptEntriesLoading,
+  promptEntriesError,
+  promptEntriesWarnings,
+} = useSessionPrompts(sessionId, previewEntries);
 
 function goBack(): void {
   void router.push({ name: "session-list" });
@@ -38,51 +37,6 @@ function goBack(): void {
 function requestDelete(targetSessionId: string): void {
   store.openDeleteDialog([targetSessionId]);
 }
-
-watch(
-  [sessionId, session],
-  async ([nextSessionId, nextSession]) => {
-    promptEntries.value = [];
-    promptEntriesError.value = "";
-    promptEntriesWarnings.value = [];
-    promptEntriesLoading.value = false;
-
-    if (!nextSessionId || !nextSession) {
-      return;
-    }
-
-    promptEntriesLoading.value = true;
-
-    try {
-      const data = await sessionPrompts({ sessionId: nextSessionId });
-      if (sessionId.value !== nextSessionId) {
-        return;
-      }
-
-      promptEntries.value = data.prompts;
-      promptEntriesWarnings.value = data.warnings;
-    } catch (error) {
-      if (sessionId.value !== nextSessionId) {
-        return;
-      }
-
-      const commandError =
-        error instanceof SessionCommandError
-          ? error
-          : new SessionCommandError(
-            "command_rejected",
-            "The full prompt history could not be loaded.",
-          );
-
-      promptEntriesError.value = [commandError.message, ...commandError.details].join("\n");
-    } finally {
-      if (sessionId.value === nextSessionId) {
-        promptEntriesLoading.value = false;
-      }
-    }
-  },
-  { immediate: true },
-);
 </script>
 
 <template>
@@ -120,7 +74,7 @@ watch(
     <SessionDetail :session="session" :selected="selected" :selection-disabled="store.isDeleting"
       :loading="store.loading" :delete-disabled="store.isDeleting" :is-deleting="isDeletingCurrent"
       @go-back="goBack" @refresh="store.refreshSessions" @toggle-select="store.toggleSessionSelection"
-      :prompt-entries="resolvedPromptEntries" :prompt-entries-loading="promptEntriesLoading"
+      :prompt-entries="promptEntries" :prompt-entries-loading="promptEntriesLoading"
       :prompt-entries-error="promptEntriesError" :prompt-entries-warnings="promptEntriesWarnings"
       @request-delete="requestDelete" />
   </section>

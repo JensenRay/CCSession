@@ -3,6 +3,7 @@ export type ApiErrorCode =
   | "state_db_open_failed"
   | "state_db_query_failed"
   | "logs_db_open_failed"
+  | "logs_db_query_failed"
   | "history_file_read_failed"
   | "history_file_write_failed"
   | "codex_running_detected"

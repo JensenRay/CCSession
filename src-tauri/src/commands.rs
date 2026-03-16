@@ -4,8 +4,7 @@ use crate::{
         ApiResponse, DeleteSessionsData, DeleteSessionsRequest, ListSessionsData,
         ListSessionsRequest, SessionPromptsData, SessionPromptsRequest,
     },
-    session_detail,
-    session_list,
+    session_detail, session_list,
 };
 
 #[tauri::command]

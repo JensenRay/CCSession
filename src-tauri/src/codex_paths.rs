@@ -1,4 +1,7 @@
-use std::path::{Component, Path, PathBuf};
+use std::{
+    fs,
+    path::{Component, Path, PathBuf},
+};
 
 use crate::models::{ApiError, ApiErrorCode};
 
@@ -60,6 +63,17 @@ impl CodexPaths {
 
         if !file_name.starts_with("rollout-") || !file_name.ends_with(".jsonl") {
             return Err("rollout file name does not match rollout-*.jsonl".to_string());
+        }
+
+        if rollout_path.exists() {
+            let canonical_sessions_root = fs::canonicalize(&self.sessions_root)
+                .map_err(|error| format!("failed to resolve sessions root: {error}"))?;
+            let canonical_rollout = fs::canonicalize(rollout_path)
+                .map_err(|error| format!("failed to resolve rollout path: {error}"))?;
+
+            if !canonical_rollout.starts_with(&canonical_sessions_root) {
+                return Err("rollout path resolves outside ~/.codex/sessions".to_string());
+            }
         }
 
         Ok(normalized_rollout)
@@ -139,6 +153,34 @@ mod tests {
         let paths = CodexPaths::from_root(codex_root).unwrap();
 
         let result = paths.snapshot_path_for_session("../danger");
+
+        assert!(result.is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_rollout_paths_that_escape_via_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let temp_dir = tempdir().unwrap();
+        let codex_root = temp_dir.path().join(".codex");
+        let sessions_root = codex_root.join("sessions");
+        let shell_snapshots_root = codex_root.join("shell_snapshots");
+        let outside_root = temp_dir.path().join("outside");
+
+        std::fs::create_dir_all(&sessions_root).unwrap();
+        std::fs::create_dir_all(&shell_snapshots_root).unwrap();
+        std::fs::create_dir_all(&outside_root).unwrap();
+
+        let escaped_rollout = outside_root.join("rollout-escaped.jsonl");
+        std::fs::write(&escaped_rollout, "{}\n").unwrap();
+
+        let link_root = sessions_root.join("2026/03/15");
+        std::fs::create_dir_all(link_root.parent().unwrap()).unwrap();
+        symlink(&outside_root, &link_root).unwrap();
+
+        let paths = CodexPaths::from_root(codex_root).unwrap();
+        let result = paths.validate_rollout_path(&link_root.join("rollout-escaped.jsonl"));
 
         assert!(result.is_err());
     }

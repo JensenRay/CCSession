@@ -41,7 +41,7 @@ pub fn load_log_counts(connection: &Connection) -> Result<HashMap<String, usize>
         )
         .map_err(|error| {
             ApiError::with_details(
-                ApiErrorCode::StateDbQueryFailed,
+                ApiErrorCode::LogsDbQueryFailed,
                 "failed to query structured log counts",
                 vec![error.to_string()],
             )
@@ -55,7 +55,7 @@ pub fn load_log_counts(connection: &Connection) -> Result<HashMap<String, usize>
         })
         .map_err(|error| {
             ApiError::with_details(
-                ApiErrorCode::StateDbQueryFailed,
+                ApiErrorCode::LogsDbQueryFailed,
                 "failed to scan structured log counts",
                 vec![error.to_string()],
             )
@@ -65,7 +65,7 @@ pub fn load_log_counts(connection: &Connection) -> Result<HashMap<String, usize>
     for row in rows {
         let (thread_id, count) = row.map_err(|error| {
             ApiError::with_details(
-                ApiErrorCode::StateDbQueryFailed,
+                ApiErrorCode::LogsDbQueryFailed,
                 "failed to decode structured log count row",
                 vec![error.to_string()],
             )

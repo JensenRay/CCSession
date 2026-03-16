@@ -28,7 +28,10 @@ export class SessionCommandError extends Error {
   }
 }
 
-function toSessionCommandError(error: unknown): SessionCommandError {
+export function toSessionCommandError(
+  error: unknown,
+  fallbackMessage = "The Tauri command failed unexpectedly.",
+): SessionCommandError {
   if (error instanceof SessionCommandError) {
     return error;
   }
@@ -41,10 +44,7 @@ function toSessionCommandError(error: unknown): SessionCommandError {
     return new SessionCommandError("command_rejected", error.message);
   }
 
-  return new SessionCommandError(
-    "command_rejected",
-    "The Tauri command failed unexpectedly.",
-  );
+  return new SessionCommandError("command_rejected", fallbackMessage);
 }
 
 async function invokeCommand<T>(

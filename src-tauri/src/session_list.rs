@@ -4,31 +4,15 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use rusqlite::{Connection, OpenFlags};
-
 use crate::{
     codex_paths::CodexPaths,
     history_store::{self, HistoryAggregation},
     log_store,
-    models::{ApiError, ApiErrorCode, ListSessionsData, ListSessionsRequest, SessionListItem},
+    models::{ApiError, ListSessionsData, ListSessionsRequest, SessionListItem},
+    state_store::{self, ThreadRow},
 };
 
 const CONTENT_PREVIEW_LIMIT: usize = 12;
-
-#[derive(Debug, Clone)]
-struct ThreadRow {
-    id: String,
-    rollout_path: String,
-    created_at: i64,
-    updated_at: i64,
-    source: String,
-    model_provider: String,
-    cwd: String,
-    title: String,
-    first_user_message: String,
-    tokens_used: i64,
-    archived: bool,
-}
 
 pub fn list_sessions(input: ListSessionsRequest) -> Result<ListSessionsData, ApiError> {
     let paths = CodexPaths::discover()?;
@@ -39,9 +23,9 @@ pub(crate) fn list_sessions_with_paths(
     paths: &CodexPaths,
     input: ListSessionsRequest,
 ) -> Result<ListSessionsData, ApiError> {
-    let state_connection = open_state_db_read_only(paths)?;
+    let state_connection = state_store::open_state_db_read_only(paths)?;
     let logs_connection = log_store::open_logs_db_read_only(paths)?;
-    let threads = load_threads(&state_connection, input.include_archived)?;
+    let threads = state_store::load_threads(&state_connection, input.include_archived)?;
     let history = history_store::scan_history_previews(&paths.history_file, CONTENT_PREVIEW_LIMIT)?;
     let log_counts = log_store::load_log_counts(&logs_connection)?;
 
@@ -125,96 +109,6 @@ fn build_list_response(
     })
 }
 
-pub(crate) fn open_state_db_read_only(paths: &CodexPaths) -> Result<Connection, ApiError> {
-    Connection::open_with_flags(&paths.state_db, OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(
-        |error| {
-            ApiError::with_details(
-                ApiErrorCode::StateDbOpenFailed,
-                "failed to open state_5.sqlite",
-                vec![error.to_string(), paths.state_db.display().to_string()],
-            )
-        },
-    )
-}
-
-pub(crate) fn open_state_db_read_write(paths: &CodexPaths) -> Result<Connection, ApiError> {
-    Connection::open_with_flags(
-        &paths.state_db,
-        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_URI,
-    )
-    .map_err(|error| {
-        ApiError::with_details(
-            ApiErrorCode::StateDbOpenFailed,
-            "failed to open state_5.sqlite for deletion",
-            vec![error.to_string(), paths.state_db.display().to_string()],
-        )
-    })
-}
-
-fn load_threads(
-    connection: &Connection,
-    include_archived: bool,
-) -> Result<Vec<ThreadRow>, ApiError> {
-    let sql = if include_archived {
-        "SELECT id, rollout_path, created_at, updated_at, source, model_provider, cwd, title, \
-         first_user_message, tokens_used, archived \
-         FROM threads \
-         ORDER BY updated_at DESC, id DESC"
-    } else {
-        "SELECT id, rollout_path, created_at, updated_at, source, model_provider, cwd, title, \
-         first_user_message, tokens_used, archived \
-         FROM threads \
-         WHERE archived = 0 \
-         ORDER BY updated_at DESC, id DESC"
-    };
-
-    let mut statement = connection.prepare(sql).map_err(|error| {
-        ApiError::with_details(
-            ApiErrorCode::StateDbQueryFailed,
-            "failed to prepare the threads query",
-            vec![error.to_string()],
-        )
-    })?;
-
-    let rows = statement
-        .query_map([], |row| {
-            let archived: i64 = row.get(10)?;
-            Ok(ThreadRow {
-                id: row.get(0)?,
-                rollout_path: row.get(1)?,
-                created_at: row.get(2)?,
-                updated_at: row.get(3)?,
-                source: row.get(4)?,
-                model_provider: row.get(5)?,
-                cwd: row.get(6)?,
-                title: row.get(7)?,
-                first_user_message: row.get(8)?,
-                tokens_used: row.get(9)?,
-                archived: archived != 0,
-            })
-        })
-        .map_err(|error| {
-            ApiError::with_details(
-                ApiErrorCode::StateDbQueryFailed,
-                "failed to execute the threads query",
-                vec![error.to_string()],
-            )
-        })?;
-
-    let mut threads = Vec::new();
-    for row in rows {
-        threads.push(row.map_err(|error| {
-            ApiError::with_details(
-                ApiErrorCode::StateDbQueryFailed,
-                "failed to decode a thread row",
-                vec![error.to_string()],
-            )
-        })?);
-    }
-
-    Ok(threads)
-}
-
 fn unix_timestamp_now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -227,8 +121,8 @@ mod tests {
     use crate::{
         models::ListSessionsRequest,
         test_support::{
-            append_history, create_test_codex_root, insert_log, insert_thread, touch_rollout,
-            touch_snapshot,
+            append_history, append_raw_history_line, create_test_codex_root, insert_log,
+            insert_thread, touch_rollout, touch_snapshot,
         },
     };
 
@@ -336,5 +230,40 @@ mod tests {
             ]
         );
         assert_eq!(data.sessions[0].history_count, 15);
+    }
+
+    #[test]
+    fn skips_malformed_history_lines_but_returns_warnings() {
+        let fixture = create_test_codex_root();
+
+        touch_rollout(&fixture, "2026/03/15/rollout-session-a.jsonl");
+        insert_thread(
+            &fixture,
+            "session-a",
+            "Preview title",
+            "first message",
+            "/tmp/project-a",
+            "2026/03/15/rollout-session-a.jsonl",
+            110,
+            240,
+            4,
+            false,
+        );
+
+        append_history(&fixture, "session-a", 1, "before");
+        append_raw_history_line(&fixture, "{\"session_id\":\"session-a\"");
+        append_history(&fixture, "session-a", 2, "after");
+
+        let data = list_sessions_with_paths(
+            &fixture.paths,
+            ListSessionsRequest {
+                include_archived: true,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(data.sessions[0].content_preview, vec!["before", "after"]);
+        assert_eq!(data.sessions[0].history_count, 2);
+        assert_eq!(data.warnings.len(), 1);
     }
 }

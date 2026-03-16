@@ -1,7 +1,6 @@
 <script setup lang="ts">
 type DeleteDialogItem = {
   id: string;
-  title: string;
   summary: string;
 };
 

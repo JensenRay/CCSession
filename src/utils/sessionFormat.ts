@@ -10,12 +10,6 @@ const compactCountFormatter = new Intl.NumberFormat("en-US", {
   notation: "compact",
 });
 
-export function getSessionTitle(
-  session: Pick<SessionListItem, "id" | "title">,
-): string {
-  return session.title.trim() || session.id;
-}
-
 export function getSessionSummary(
   session: Pick<SessionListItem, "summary">,
 ): string {

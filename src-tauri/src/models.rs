@@ -37,6 +37,7 @@ pub enum ApiErrorCode {
     StateDbOpenFailed,
     StateDbQueryFailed,
     LogsDbOpenFailed,
+    LogsDbQueryFailed,
     HistoryFileReadFailed,
     HistoryFileWriteFailed,
     CodexRunningDetected,

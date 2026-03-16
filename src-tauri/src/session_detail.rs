@@ -34,7 +34,7 @@ pub(crate) fn session_prompts_with_paths(
 mod tests {
     use crate::{
         models::SessionPromptsRequest,
-        test_support::{append_history, create_test_codex_root},
+        test_support::{append_history, append_raw_history_line, create_test_codex_root},
     };
 
     use super::session_prompts_with_paths;
@@ -58,5 +58,25 @@ mod tests {
 
         assert_eq!(data.session_id, "session-a");
         assert_eq!(data.prompts, vec!["first", "second", "third"]);
+    }
+
+    #[test]
+    fn skips_malformed_history_lines_and_reports_warnings() {
+        let fixture = create_test_codex_root();
+
+        append_history(&fixture, "session-a", 1, "first");
+        append_raw_history_line(&fixture, "{\"session_id\":\"session-a\"");
+        append_history(&fixture, "session-a", 2, "second");
+
+        let data = session_prompts_with_paths(
+            &fixture.paths,
+            SessionPromptsRequest {
+                session_id: "session-a".to_string(),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(data.prompts, vec!["first", "second"]);
+        assert_eq!(data.warnings.len(), 1);
     }
 }

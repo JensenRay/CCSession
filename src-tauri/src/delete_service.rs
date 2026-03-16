@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use rusqlite::{params, Connection, Error as SqlError, ErrorCode};
+use rusqlite::{Connection, Error as SqlError, ErrorCode};
 
 use crate::{
     codex_paths::CodexPaths,
@@ -13,7 +13,7 @@ use crate::{
         ApiError, ApiErrorCode, DeleteSessionsData, DeleteSessionsRequest, SessionDeleteReport,
         SessionDeleteStatus,
     },
-    session_list,
+    state_store::{self, StateDeleteRow},
 };
 
 #[derive(Debug, Clone)]
@@ -40,7 +40,7 @@ pub(crate) fn delete_sessions_with_paths(
         ));
     }
 
-    let state_connection = session_list::open_state_db_read_write(paths)?;
+    let state_connection = state_store::open_state_db_read_write(paths)?;
     if input.require_codex_stopped {
         ensure_database_is_writable(&state_connection, ApiErrorCode::CodexRunningDetected)?;
     }
@@ -54,7 +54,7 @@ pub(crate) fn delete_sessions_with_paths(
             )
         })?;
 
-    let state_rows = load_threads_for_delete(&state_connection, &ordered_session_ids)?;
+    let state_rows = state_store::load_delete_rows(&state_connection, &ordered_session_ids)?;
     if state_rows.is_empty() {
         let reports = ordered_session_ids
             .into_iter()
@@ -69,7 +69,34 @@ pub(crate) fn delete_sessions_with_paths(
     }
     let history_file = history_store::load_history_file(&paths.history_file)?;
 
-    let mut reports = ordered_session_ids
+    let mut reports = initialize_reports(&ordered_session_ids);
+    let mut warnings = history_file.warnings.clone();
+    let delete_plans = build_delete_plans(paths, state_rows, &mut reports);
+    let deleted_state_ids = delete_state_rows(&state_connection, &delete_plans, &mut reports);
+
+    delete_structured_logs_for_plans(
+        &logs_connection,
+        &delete_plans,
+        &deleted_state_ids,
+        &mut reports,
+    );
+    rewrite_history_entries(
+        &history_file,
+        &paths.history_file,
+        &deleted_state_ids,
+        &mut reports,
+        &mut warnings,
+    );
+    cleanup_deleted_files(&delete_plans, &deleted_state_ids, &mut reports);
+
+    Ok(summarize_reports(
+        finalize_reports_in_order(ordered_session_ids, reports),
+        warnings,
+    ))
+}
+
+fn initialize_reports(ordered_session_ids: &[String]) -> HashMap<String, SessionDeleteReport> {
+    ordered_session_ids
         .iter()
         .map(|session_id| {
             (
@@ -77,22 +104,18 @@ pub(crate) fn delete_sessions_with_paths(
                 SessionDeleteReport::not_found(session_id.clone()),
             )
         })
-        .collect::<HashMap<_, _>>();
-    let mut warnings = history_file.warnings.clone();
+        .collect()
+}
+
+fn build_delete_plans(
+    paths: &CodexPaths,
+    state_rows: Vec<StateDeleteRow>,
+    reports: &mut HashMap<String, SessionDeleteReport>,
+) -> Vec<DeletePlan> {
     let mut delete_plans = Vec::new();
 
     for row in state_rows {
-        let mut report = SessionDeleteReport {
-            session_id: row.session_id.clone(),
-            status: SessionDeleteStatus::Failed,
-            deleted_state_row: false,
-            deleted_history_entries: 0,
-            deleted_structured_log_rows: 0,
-            deleted_rollout_file: false,
-            deleted_snapshot_file: false,
-            warnings: Vec::new(),
-            error: None,
-        };
+        let mut report = failed_report(&row.session_id);
 
         let rollout_path = match paths.validate_rollout_path(&row.rollout_path) {
             Ok(path) => Some(path),
@@ -101,7 +124,6 @@ pub(crate) fn delete_sessions_with_paths(
                     "rollout path validation failed before deletion: {}",
                     error
                 ));
-                report.status = SessionDeleteStatus::Failed;
                 reports.insert(row.session_id, report);
                 continue;
             }
@@ -125,17 +147,32 @@ pub(crate) fn delete_sessions_with_paths(
         reports.insert(row.session_id, report);
     }
 
-    let mut state_deleted_ids = HashSet::new();
+    delete_plans
+}
 
-    for plan in &delete_plans {
-        let report = reports
-            .get_mut(&plan.session_id)
-            .expect("delete report must exist for validated plans");
+fn delete_structured_logs(connection: &Connection, session_id: &str) -> Result<usize, String> {
+    connection
+        .execute(
+            "DELETE FROM logs WHERE thread_id = ?1",
+            rusqlite::params![session_id],
+        )
+        .map_err(|error| format!("failed to delete structured logs: {}", error))
+}
 
-        match delete_state_row(&state_connection, &plan.session_id) {
+fn delete_state_rows(
+    connection: &Connection,
+    delete_plans: &[DeletePlan],
+    reports: &mut HashMap<String, SessionDeleteReport>,
+) -> HashSet<String> {
+    let mut deleted_state_ids = HashSet::new();
+
+    for plan in delete_plans {
+        let report = report_mut(reports, &plan.session_id);
+
+        match state_store::delete_thread(connection, &plan.session_id) {
             Ok(true) => {
                 report.deleted_state_row = true;
-                state_deleted_ids.insert(plan.session_id.clone());
+                deleted_state_ids.insert(plan.session_id.clone());
             }
             Ok(false) => {
                 report.status = SessionDeleteStatus::NotFound;
@@ -147,16 +184,23 @@ pub(crate) fn delete_sessions_with_paths(
         }
     }
 
-    for plan in &delete_plans {
-        if !state_deleted_ids.contains(&plan.session_id) {
+    deleted_state_ids
+}
+
+fn delete_structured_logs_for_plans(
+    connection: &Connection,
+    delete_plans: &[DeletePlan],
+    deleted_state_ids: &HashSet<String>,
+    reports: &mut HashMap<String, SessionDeleteReport>,
+) {
+    for plan in delete_plans {
+        if !deleted_state_ids.contains(&plan.session_id) {
             continue;
         }
 
-        let report = reports
-            .get_mut(&plan.session_id)
-            .expect("delete report must exist for state-deleted plans");
+        let report = report_mut(reports, &plan.session_id);
 
-        match delete_structured_logs(&logs_connection, &plan.session_id) {
+        match delete_structured_logs(connection, &plan.session_id) {
             Ok(deleted_rows) => {
                 report.deleted_structured_log_rows = deleted_rows;
             }
@@ -164,50 +208,62 @@ pub(crate) fn delete_sessions_with_paths(
                 report
                     .warnings
                     .push("structured log cleanup was incomplete".to_string());
-                report.error = Some(match &report.error {
-                    Some(existing) => format!("{}; {}", existing, error),
-                    None => error,
-                });
+                append_report_error(report, error);
             }
         }
     }
+}
 
-    if !state_deleted_ids.is_empty() {
-        match history_file.rewrite_without(&paths.history_file, &state_deleted_ids) {
-            Ok(history_deleted_counts) => {
-                for (session_id, deleted_entries) in history_deleted_counts {
-                    if let Some(report) = reports.get_mut(&session_id) {
-                        report.deleted_history_entries = deleted_entries;
-                    }
+fn rewrite_history_entries(
+    history_file: &history_store::LoadedHistoryFile,
+    history_path: &Path,
+    deleted_state_ids: &HashSet<String>,
+    reports: &mut HashMap<String, SessionDeleteReport>,
+    warnings: &mut Vec<String>,
+) {
+    if deleted_state_ids.is_empty() {
+        return;
+    }
+
+    match history_file.rewrite_without(history_path, deleted_state_ids) {
+        Ok(history_deleted_counts) => {
+            for (session_id, deleted_entries) in history_deleted_counts {
+                if let Some(report) = reports.get_mut(&session_id) {
+                    report.deleted_history_entries = deleted_entries;
                 }
             }
-            Err(error) => {
-                let message = error.message;
-                let details = error.details.join("; ");
-                warnings.push(format!("history rewrite failed: {}", details));
-                for session_id in &state_deleted_ids {
-                    if let Some(report) = reports.get_mut(session_id) {
-                        report
-                            .warnings
-                            .push("history cleanup was incomplete".to_string());
-                        report.error = Some(match &report.error {
-                            Some(existing) => format!("{}; {}", existing, message),
-                            None => message.clone(),
-                        });
-                    }
+        }
+        Err(error) => {
+            let history_warning = if error.details.is_empty() {
+                error.message.clone()
+            } else {
+                format!("{} ({})", error.message, error.details.join("; "))
+            };
+            warnings.push(format!("history rewrite failed: {}", history_warning));
+
+            for session_id in deleted_state_ids {
+                if let Some(report) = reports.get_mut(session_id) {
+                    report
+                        .warnings
+                        .push("history cleanup was incomplete".to_string());
+                    append_report_error(report, error.message.clone());
                 }
             }
         }
     }
+}
 
-    for plan in &delete_plans {
-        if !state_deleted_ids.contains(&plan.session_id) {
+fn cleanup_deleted_files(
+    delete_plans: &[DeletePlan],
+    deleted_state_ids: &HashSet<String>,
+    reports: &mut HashMap<String, SessionDeleteReport>,
+) {
+    for plan in delete_plans {
+        if !deleted_state_ids.contains(&plan.session_id) {
             continue;
         }
 
-        let report = reports
-            .get_mut(&plan.session_id)
-            .expect("delete report must exist for file cleanup");
+        let report = report_mut(reports, &plan.session_id);
 
         if let Some(rollout_path) = &plan.rollout_path {
             match trash_optional_file(rollout_path) {
@@ -220,12 +276,7 @@ pub(crate) fn delete_sessions_with_paths(
                         .push("rollout file was missing before deletion".to_string());
                 }
                 Ok(None) => {}
-                Err(error) => {
-                    report.error = Some(match &report.error {
-                        Some(existing) => format!("{}; {}", existing, error),
-                        None => error,
-                    });
-                }
+                Err(error) => append_report_error(report, error),
             }
         }
 
@@ -240,17 +291,18 @@ pub(crate) fn delete_sessions_with_paths(
                         .push("snapshot file was missing before deletion".to_string());
                 }
                 Ok(None) => {}
-                Err(error) => {
-                    report.error = Some(match &report.error {
-                        Some(existing) => format!("{}; {}", existing, error),
-                        None => error,
-                    });
-                }
+                Err(error) => append_report_error(report, error),
             }
         }
     }
+}
 
+fn finalize_reports_in_order(
+    ordered_session_ids: Vec<String>,
+    mut reports: HashMap<String, SessionDeleteReport>,
+) -> Vec<SessionDeleteReport> {
     let mut ordered_reports = Vec::with_capacity(ordered_session_ids.len());
+
     for session_id in ordered_session_ids {
         let mut report = reports
             .remove(&session_id)
@@ -259,81 +311,40 @@ pub(crate) fn delete_sessions_with_paths(
         ordered_reports.push(report);
     }
 
-    Ok(summarize_reports(ordered_reports, warnings))
+    ordered_reports
 }
 
-#[derive(Debug)]
-struct StateDeleteRow {
-    session_id: String,
-    rollout_path: PathBuf,
-}
-
-fn load_threads_for_delete(
-    connection: &Connection,
-    session_ids: &[String],
-) -> Result<Vec<StateDeleteRow>, ApiError> {
-    if session_ids.is_empty() {
-        return Ok(Vec::new());
+fn failed_report(session_id: &str) -> SessionDeleteReport {
+    SessionDeleteReport {
+        session_id: session_id.to_string(),
+        status: SessionDeleteStatus::Failed,
+        deleted_state_row: false,
+        deleted_history_entries: 0,
+        deleted_structured_log_rows: 0,
+        deleted_rollout_file: false,
+        deleted_snapshot_file: false,
+        warnings: Vec::new(),
+        error: None,
     }
-
-    let placeholders = std::iter::repeat_n("?", session_ids.len())
-        .collect::<Vec<_>>()
-        .join(", ");
-    let sql = format!(
-        "SELECT id, rollout_path FROM threads WHERE id IN ({})",
-        placeholders
-    );
-    let mut statement = connection.prepare(&sql).map_err(|error| {
-        ApiError::with_details(
-            ApiErrorCode::StateDbQueryFailed,
-            "failed to prepare the delete lookup query",
-            vec![error.to_string()],
-        )
-    })?;
-
-    let rows = statement
-        .query_map(rusqlite::params_from_iter(session_ids.iter()), |row| {
-            Ok(StateDeleteRow {
-                session_id: row.get(0)?,
-                rollout_path: PathBuf::from(row.get::<_, String>(1)?),
-            })
-        })
-        .map_err(|error| {
-            ApiError::with_details(
-                ApiErrorCode::StateDbQueryFailed,
-                "failed to execute the delete lookup query",
-                vec![error.to_string()],
-            )
-        })?;
-
-    let mut state_rows = Vec::new();
-    for row in rows {
-        state_rows.push(row.map_err(|error| {
-            ApiError::with_details(
-                ApiErrorCode::StateDbQueryFailed,
-                "failed to decode a delete lookup row",
-                vec![error.to_string()],
-            )
-        })?);
-    }
-
-    Ok(state_rows)
 }
 
-fn delete_state_row(connection: &Connection, session_id: &str) -> Result<bool, String> {
-    connection
-        .execute("DELETE FROM threads WHERE id = ?1", params![session_id])
-        .map(|changed_rows| changed_rows > 0)
-        .map_err(|error| format!("failed to delete state row: {}", error))
+fn report_mut<'a>(
+    reports: &'a mut HashMap<String, SessionDeleteReport>,
+    session_id: &str,
+) -> &'a mut SessionDeleteReport {
+    reports
+        .get_mut(session_id)
+        .expect("delete report must exist for planned session")
 }
 
-fn delete_structured_logs(connection: &Connection, session_id: &str) -> Result<usize, String> {
-    connection
-        .execute("DELETE FROM logs WHERE thread_id = ?1", params![session_id])
-        .map_err(|error| format!("failed to delete structured logs: {}", error))
+fn append_report_error(report: &mut SessionDeleteReport, error: String) {
+    report.error = Some(match report.error.take() {
+        Some(existing) => format!("{}; {}", existing, error),
+        None => error,
+    });
 }
 
-fn delete_optional_file(path: &PathBuf) -> Result<Option<bool>, String> {
+fn delete_optional_file(path: &Path) -> Result<Option<bool>, String> {
     match fs::remove_file(path) {
         Ok(()) => Ok(Some(true)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Some(false)),
@@ -508,8 +519,8 @@ mod tests {
     use crate::{
         models::{DeleteSessionsRequest, SessionDeleteStatus},
         test_support::{
-            append_history, create_test_codex_root, insert_log, insert_thread, read_history_file,
-            touch_rollout, touch_snapshot,
+            append_history, append_raw_history_line, create_test_codex_root, insert_log,
+            insert_thread, read_history_file, touch_rollout, touch_snapshot,
         },
     };
 
@@ -605,5 +616,41 @@ mod tests {
             .join("session-a.sh")
             .exists());
         assert!(read_history_file(&fixture).contains("\"session_id\":\"session-b\""));
+    }
+
+    #[test]
+    fn preserves_malformed_history_lines_when_rewriting_history() {
+        let fixture = create_test_codex_root();
+
+        touch_rollout(&fixture, "2026/03/15/rollout-session-a.jsonl");
+        touch_snapshot(&fixture, "session-a");
+        insert_thread(
+            &fixture,
+            "session-a",
+            "Title A",
+            "Preview A",
+            "/tmp/a",
+            "2026/03/15/rollout-session-a.jsonl",
+            10,
+            20,
+            1,
+            false,
+        );
+
+        append_history(&fixture, "session-a", 1, "a-1");
+        append_raw_history_line(&fixture, "{\"session_id\":\"broken\"");
+
+        let result = delete_sessions_with_paths(
+            &fixture.paths,
+            DeleteSessionsRequest {
+                session_ids: vec!["session-a".to_string()],
+                require_codex_stopped: false,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.deleted_count, 1);
+        assert!(read_history_file(&fixture).contains("{\"session_id\":\"broken\""));
+        assert!(!read_history_file(&fixture).contains("\"session_id\":\"session-a\""));
     }
 }

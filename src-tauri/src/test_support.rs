@@ -151,6 +151,14 @@ pub fn append_history(fixture: &TestCodexRoot, session_id: &str, ts: i64, text: 
     .unwrap();
 }
 
+pub fn append_raw_history_line(fixture: &TestCodexRoot, line: &str) {
+    let mut file = fs::OpenOptions::new()
+        .append(true)
+        .open(&fixture.paths.history_file)
+        .unwrap();
+    writeln!(file, "{}", line).unwrap();
+}
+
 pub fn touch_rollout(fixture: &TestCodexRoot, rollout_relative_path: &str) {
     let path = fixture.root.join("sessions").join(rollout_relative_path);
     if let Some(parent) = path.parent() {
