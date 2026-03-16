@@ -42,6 +42,13 @@ If you do not trust the prebuilt binaries, the best option is to build the app y
 - [Rust](https://v2.tauri.app/start/prerequisites/#rust)
 - Node ecosystem ([Node](https://nodejs.org), [Bun](https://bun.com) or others)
 
+### Clone Porject
+
+```bash
+git clone https://github.com/JensenRay/CCSession.git
+cd CCSession
+```
+
 ### Development
 
 ```bash
@@ -52,8 +59,6 @@ bun tauri dev
 ### Production Build
 
 ```bash
-git clone https://github.com/JensenRay/CCSession.git
-cd CCSession
 bun install
 bun tauri build
 ```
