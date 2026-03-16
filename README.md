@@ -23,6 +23,7 @@ The goal is simple: keep `~/.codex` clean and easier to manage.
 ## Platform Support
 
 - macOS
-- Linux
+- linux
+- windows
 
-Windows may also work, but macOS and Linux are the primary targets.
+The Windows and Linux releases have not been tested in real-world environments yet. I'd appreciate your feedback.
