@@ -6,20 +6,6 @@ CCSession cleans session-related data under `~/.codex`, including JSONL files an
 
 The goal is simple: keep `~/.codex` clean and easier to manage.
 
-## Unsigned Builds
-
-All distributed binaries are unsigned.
-
-If you download and run a prebuilt release, especially on macOS, you must remove the quarantine attribute first:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/CCSession.app
-```
-
-Then use **Run Anyway** in macOS Privacy & Security if Gatekeeper still blocks the app.
-
-If you do not trust the prebuilt binaries, the best option is to build the app yourself from source.
-
 ## What It Cleans
 
 - Session records in `state_5.sqlite`
@@ -34,28 +20,27 @@ If you do not trust the prebuilt binaries, the best option is to build the app y
 - Local data access: `rusqlite` + standard filesystem APIs
 - Trash support: Rust `trash` crate
 
+## Unsigned Builds
+
+All distributed binaries are unsigned.
+
+If you download and run a prebuilt release, especially on macOS, you must remove the quarantine attribute first:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/CCSession.app
+```
+
+Then use **Run Anyway** in macOS Privacy & Security if Gatekeeper still blocks the app.
+
+If you do not trust the prebuilt binaries, the best option is to build the app yourself from source.
+
 ## Build From Source
 
 ### Requirements
 
-- Bun
-- Rust
-- Tauri 2 build prerequisites for your platform
-
-Linux users also need the standard Tauri system dependencies. For example on Ubuntu/Debian:
-
-```bash
-sudo apt update
-sudo apt install libwebkit2gtk-4.1-dev \
-  build-essential \
-  curl \
-  wget \
-  file \
-  libxdo-dev \
-  libssl-dev \
-  libayatana-appindicator3-dev \
-  librsvg2-dev
-```
+- [System Dependencies](https://v2.tauri.app/start/prerequisites/#system-dependencies)
+- [Rust](https://v2.tauri.app/start/prerequisites/#rust)
+- Node ecosystem ([Node](https://nodejs.org), [Bun](https://bun.com) or others)
 
 ### Development
 
@@ -67,6 +52,8 @@ bun tauri dev
 ### Production Build
 
 ```bash
+git clone https://github.com/JensenRay/CCSession.git
+cd CCSession
 bun install
 bun tauri build
 ```
