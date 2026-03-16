@@ -6,6 +6,20 @@ CCSession cleans session-related data under `~/.codex`, including JSONL files an
 
 The goal is simple: keep `~/.codex` clean and easier to manage.
 
+## Unsigned Builds
+
+All distributed binaries are unsigned.
+
+If you download and run a prebuilt release, especially on macOS, you must remove the quarantine attribute first:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/CCSession.app
+```
+
+Then use **Run Anyway** in macOS Privacy & Security if Gatekeeper still blocks the app.
+
+If you do not trust the prebuilt binaries, the best option is to build the app yourself from source.
+
 ## What It Cleans
 
 - Session records in `state_5.sqlite`
@@ -20,10 +34,49 @@ The goal is simple: keep `~/.codex` clean and easier to manage.
 - Local data access: `rusqlite` + standard filesystem APIs
 - Trash support: Rust `trash` crate
 
+## Build From Source
+
+### Requirements
+
+- Bun
+- Rust
+- Tauri 2 build prerequisites for your platform
+
+Linux users also need the standard Tauri system dependencies. For example on Ubuntu/Debian:
+
+```bash
+sudo apt update
+sudo apt install libwebkit2gtk-4.1-dev \
+  build-essential \
+  curl \
+  wget \
+  file \
+  libxdo-dev \
+  libssl-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev
+```
+
+### Development
+
+```bash
+bun install
+bun tauri dev
+```
+
+### Production Build
+
+```bash
+bun install
+bun tauri build
+```
+
+The generated application bundles and installers will be placed under `src-tauri/target/release/bundle/`.
+
 ## Platform Support
 
 - macOS
-- linux
-- windows
+- Linux
+- Windows
 
-The Windows and Linux releases have not been tested in real-world environments yet. I'd appreciate your feedback.
+The Windows and Linux releases have not been tested in a wide range of real-world environments yet. I'd appreciate feedback.

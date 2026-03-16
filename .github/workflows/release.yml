@@ -70,8 +70,18 @@ jobs:
           tagName: v__VERSION__
           releaseName: CCSession v__VERSION__
           releaseBody: |
-            Automated release for CCSession.
+            CCSession release binaries are unsigned.
 
-            Download the asset for your platform from the release attachments.
+            If you download the macOS build, remove the quarantine attribute first:
+
+            xattr -dr com.apple.quarantine /Applications/CCSession.app
+
+            After that, use Run Anyway in macOS Privacy & Security if macOS still blocks the app.
+
+            If you do not trust the prebuilt binaries, build the app from source instead:
+
+            1. Install Bun, Rust, and the Tauri prerequisites for your platform.
+            2. Run `bun install`
+            3. Run `bun tauri build`
           releaseDraft: false
           prerelease: false
