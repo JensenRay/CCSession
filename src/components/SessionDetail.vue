@@ -59,7 +59,7 @@ const metaItems = computed(() => {
         <label class="session-detail__toggle">
           <input type="checkbox" :checked="selected" :disabled="selectionDisabled"
             @change="emit('toggle-select', session.id)" />
-          <span>Include in batch delete</span>
+          <span>Select</span>
         </label>
       </div>
 

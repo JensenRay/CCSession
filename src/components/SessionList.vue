@@ -60,7 +60,7 @@ watchEffect(() => {
     <label class="session-list__select-all">
       <input ref="selectAllRef" type="checkbox" :checked="allSelected" :disabled="selectionDisabled || !sessions.length"
         @change="emit('toggle-all')" />
-      <span>Select every visible session</span>
+      <span>Select ALL</span>
     </label>
 
     <div class="session-list__items">
