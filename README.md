@@ -20,6 +20,23 @@ The goal is simple: keep `~/.codex` clean and easier to manage.
 - Local data access: `rusqlite` + standard filesystem APIs
 - Trash support: Rust `trash` crate
 
+## Install
+
+If you're using Homebrew on macOS, you can install it with:
+
+```bash
+brew tap jensenray/toys
+brew install --cask ccsession
+```
+
+Uninstall is easy too:
+
+```bash
+brew uninstall --cask --zap ccsession
+```
+
+Other installation methods can be found on the Releases page.
+
 ## Unsigned Builds
 
 All distributed binaries are unsigned.
