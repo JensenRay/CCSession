@@ -6,6 +6,8 @@ import type {
   DeleteSessionsRequest,
   ListSessionsData,
   ListSessionsRequest,
+  SessionPromptsData,
+  SessionPromptsRequest,
 } from "../types";
 
 export type SessionCommandErrorCode = ApiErrorCode | "command_rejected";
@@ -89,5 +91,13 @@ export async function deleteSessions(
 
   return invokeCommand<DeleteSessionsData>("delete_sessions", {
     ...request,
+  });
+}
+
+export async function sessionPrompts(
+  input: SessionPromptsRequest,
+): Promise<SessionPromptsData> {
+  return invokeCommand<SessionPromptsData>("session_prompts", {
+    ...input,
   });
 }

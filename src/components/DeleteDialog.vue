@@ -25,28 +25,14 @@ const emit = defineEmits<{
     <section class="dialog-panel" role="dialog" aria-modal="true" :aria-label="title">
       <header class="dialog-panel__header">
         <div>
-          <p class="dialog-panel__eyebrow">Delete Confirmation</p>
           <h2 class="dialog-panel__title">{{ title }}</h2>
         </div>
-        <button class="ui-button ui-button--ghost dialog-panel__close" type="button" :disabled="busy"
-          @click="emit('close')">
-          Close
-        </button>
       </header>
 
       <p class="dialog-panel__description">{{ description }}</p>
 
-      <section class="dialog-panel__warning">
-        <p class="dialog-panel__warning-title">Before deleting</p>
-        <ul class="dialog-panel__warning-list">
-          <li>请先退出 Codex，避免 SQLite 和本地文件仍在被写入。</li>
-          <li>rollout JSONL 会移到回收站，方便误删后手动恢复主要对话内容。</li>
-        </ul>
-      </section>
-
       <ul class="dialog-panel__items">
         <li v-for="item in items" :key="item.id" class="dialog-panel__item">
-          <h3>{{ item.title }}</h3>
           <p>{{ item.summary }}</p>
           <code>{{ item.id }}</code>
         </li>
@@ -81,8 +67,10 @@ const emit = defineEmits<{
 .dialog-panel {
   width: min(640px, 100%);
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 1rem;
   padding: 1.35rem;
+  max-height: calc(100dvh - 2rem);
   border-radius: 1.3rem;
   border: 1px solid var(--border);
   background:
@@ -153,9 +141,23 @@ const emit = defineEmits<{
   margin: 0;
   padding: 0;
   list-style: none;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.25rem;
+}
+
+.dialog-panel__items::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dialog-panel__items::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .dialog-panel__item {
+  min-width: 0;
   padding: 0.9rem 1rem;
   border-radius: 1rem;
   background: rgba(255, 255, 255, 0.04);
@@ -174,9 +176,14 @@ const emit = defineEmits<{
 }
 
 .dialog-panel__item p {
-  margin-top: 0.45rem;
   color: var(--text-soft);
   line-height: 1.6;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .dialog-panel__item code {
@@ -186,6 +193,10 @@ const emit = defineEmits<{
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
   color: var(--accent);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 640px) {
@@ -198,6 +209,18 @@ const emit = defineEmits<{
   .dialog-panel__footer {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+@media (max-height: 820px) {
+  .dialog-backdrop {
+    padding: 0.75rem;
+  }
+
+  .dialog-panel {
+    gap: 0.85rem;
+    padding: 1rem;
+    max-height: calc(100dvh - 1.5rem);
   }
 }
 </style>

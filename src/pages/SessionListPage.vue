@@ -47,5 +47,8 @@ function openSession(sessionId: string): void {
 <style scoped>
 .list-page {
   display: grid;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 </style>

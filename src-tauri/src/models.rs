@@ -68,6 +68,12 @@ pub struct ListSessionsRequest {
     pub include_archived: bool,
 }
 
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionPromptsRequest {
+    pub session_id: String,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteSessionsRequest {
@@ -83,6 +89,14 @@ pub struct ListSessionsData {
     pub total: usize,
     pub scanned_at: i64,
     pub codex_root: String,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionPromptsData {
+    pub session_id: String,
+    pub prompts: Vec<String>,
     pub warnings: Vec<String>,
 }
 

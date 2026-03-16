@@ -29,6 +29,10 @@ export type ListSessionsRequest = {
   includeArchived: boolean;
 };
 
+export type SessionPromptsRequest = {
+  sessionId: string;
+};
+
 export type SessionListItem = {
   id: string;
   title: string;
@@ -52,6 +56,12 @@ export type ListSessionsData = {
   total: number;
   scannedAt: number;
   codexRoot: string;
+  warnings: string[];
+};
+
+export type SessionPromptsData = {
+  sessionId: string;
+  prompts: string[];
   warnings: string[];
 };
 

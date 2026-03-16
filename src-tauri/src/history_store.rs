@@ -42,6 +42,12 @@ pub struct HistoryAggregation {
     pub warnings: Vec<String>,
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct SessionPromptHistory {
+    pub prompts: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct LoadedHistoryFile {
     lines: Vec<HistoryLine>,
@@ -208,6 +214,54 @@ pub fn scan_history_previews(
 
     Ok(HistoryAggregation {
         summaries,
+        warnings,
+    })
+}
+
+pub fn load_session_prompts(
+    history_path: &Path,
+    session_id: &str,
+) -> Result<SessionPromptHistory, ApiError> {
+    let file = File::open(history_path).map_err(|error| {
+        ApiError::with_details(
+            ApiErrorCode::HistoryFileReadFailed,
+            "failed to open history.jsonl",
+            vec![error.to_string(), history_path.display().to_string()],
+        )
+    })?;
+    let reader = BufReader::new(file);
+
+    let mut entries = Vec::<PreviewEntry>::new();
+    let mut warnings = Vec::new();
+
+    for (line_index, line_result) in reader.lines().enumerate() {
+        let line = line_result.map_err(|error| {
+            ApiError::with_details(
+                ApiErrorCode::HistoryFileReadFailed,
+                "failed to read history.jsonl",
+                vec![error.to_string(), history_path.display().to_string()],
+            )
+        })?;
+
+        match serde_json::from_str::<HistoryRecord>(&line) {
+            Ok(record) if record.session_id == session_id => entries.push(PreviewEntry {
+                ts: record.ts,
+                order: line_index,
+                text: record.text,
+            }),
+            Ok(_) => {}
+            Err(error) => warnings.push(format!(
+                "skipped malformed history line {}: {}",
+                line_index + 1,
+                error
+            )),
+        }
+    }
+
+    entries.sort_by_key(|entry| (entry.ts, entry.order));
+
+    Ok(SessionPromptHistory {
+        prompts: entries.into_iter().map(|entry| entry.text).collect(),
         warnings,
     })
 }

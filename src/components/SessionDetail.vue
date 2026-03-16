@@ -4,49 +4,33 @@ import type { SessionListItem } from "../types";
 import {
   formatCount,
   formatFullTimestamp,
-  getSessionSummary,
 } from "../utils/sessionFormat";
 
 const props = defineProps<{
   session: SessionListItem | null;
+  loading?: boolean;
   selected?: boolean;
   selectionDisabled?: boolean;
   deleteDisabled?: boolean;
   isDeleting?: boolean;
+  promptEntries: string[];
+  promptEntriesLoading?: boolean;
+  promptEntriesError?: string;
+  promptEntriesWarnings?: string[];
 }>();
 
 const emit = defineEmits<{
+  (event: "go-back"): void;
+  (event: "refresh"): void;
   (event: "toggle-select", sessionId: string): void;
   (event: "request-delete", sessionId: string): void;
 }>();
-
-const summary = computed(() =>
-  props.session ? getSessionSummary(props.session) : "No summary available.",
-);
 const updatedAtLabel = computed(() =>
   props.session ? formatFullTimestamp(props.session.updatedAt) : "",
 );
 const createdAtLabel = computed(() =>
   props.session ? formatFullTimestamp(props.session.createdAt) : "",
 );
-const statCards = computed(() => {
-  if (!props.session) {
-    return [];
-  }
-
-  return [
-    {
-      label: "History entries",
-      value: formatCount(props.session.historyCount),
-    },
-    {
-      label: "Structured logs",
-      value: formatCount(props.session.structuredLogCount),
-    },
-    { label: "Tokens used", value: formatCount(props.session.tokensUsed) },
-    { label: "Updated", value: updatedAtLabel.value },
-  ];
-});
 const metaItems = computed(() => {
   if (!props.session) {
     return [];
@@ -57,6 +41,8 @@ const metaItems = computed(() => {
     { label: "Project", value: props.session.cwd },
     { label: "Created", value: createdAtLabel.value },
     { label: "Updated", value: updatedAtLabel.value },
+    { label: "History entries", value: formatCount(props.session.historyCount) },
+    { label: "Tokens used", value: formatCount(props.session.tokensUsed) },
     { label: "Source", value: props.session.source || "Unknown" },
     { label: "Provider", value: props.session.modelProvider || "Unknown" },
   ];
@@ -67,58 +53,57 @@ const metaItems = computed(() => {
   <section v-if="session" class="session-detail">
     <div class="session-detail__toolbar">
       <div class="session-detail__toolbar-group">
-        <slot name="toolbar-start" />
-      </div>
-
-      <div class="session-detail__toolbar-group session-detail__toolbar-group--end">
+        <button class="ui-button ui-button--ghost" type="button" @click="emit('go-back')">
+          Back to List
+        </button>
         <label class="session-detail__toggle">
           <input type="checkbox" :checked="selected" :disabled="selectionDisabled"
             @change="emit('toggle-select', session.id)" />
           <span>Include in batch delete</span>
         </label>
+      </div>
 
-        <button class="session-detail__delete" type="button" :disabled="deleteDisabled"
+      <div class="session-detail__toolbar-group session-detail__toolbar-group--end">
+        <button class="ui-button ui-button--danger session-detail__delete" type="button" :disabled="deleteDisabled"
           @click="emit('request-delete', session.id)">
           {{ isDeleting ? "Deleting..." : "Delete Session" }}
+        </button>
+
+        <button class="ui-button" type="button" :disabled="loading" @click="emit('refresh')">
+          {{ loading ? "Refreshing..." : "Refresh" }}
         </button>
       </div>
     </div>
 
-    <header class="session-detail__header">
-      <div class="session-detail__header-copy">
-        <p class="session-detail__eyebrow">Session Detail</p>
-        <p class="session-detail__summary">{{ summary }}</p>
-      </div>
-    </header>
-
-    <section class="session-detail__stats">
-      <article v-for="stat in statCards" :key="stat.label" class="session-detail__stat-card">
-        <span class="session-detail__stat-label">{{ stat.label }}</span>
-        <strong class="session-detail__stat-value">{{ stat.value }}</strong>
-      </article>
-    </section>
-
-    <section class="session-detail__section">
+    <section class="session-detail__section session-detail__section--history">
       <div class="session-detail__section-header">
-        <h3>Recent prompt preview</h3>
-        <span>{{ session.contentPreview.length }} entries</span>
+        <h3>Prompt History</h3>
+        <span>{{ promptEntries.length }} prompts</span>
       </div>
 
-      <ul v-if="session.contentPreview.length" class="session-detail__preview-list">
-        <li v-for="(item, index) in session.contentPreview" :key="`${session.id}-${index}`"
+      <p v-if="promptEntriesLoading" class="session-detail__inline-note">
+        Loading the full prompt history...
+      </p>
+      <p v-else-if="promptEntriesError" class="session-detail__inline-note session-detail__inline-note--error">
+        {{ promptEntriesError }}
+      </p>
+      <ul v-else-if="promptEntries.length" class="session-detail__preview-list">
+        <li v-for="(item, index) in promptEntries" :key="`${session.id}-${index}`"
           class="session-detail__preview-item">
           {{ item }}
         </li>
       </ul>
       <p v-else class="session-detail__empty">
-        No preview lines were returned for this session.
+        No prompt entries were returned for this session.
       </p>
+      <ul v-if="promptEntriesWarnings?.length" class="session-detail__warning-list">
+        <li v-for="warning in promptEntriesWarnings" :key="warning">{{ warning }}</li>
+      </ul>
     </section>
 
-    <section class="session-detail__section">
+    <section class="session-detail__section session-detail__section--metadata">
       <div class="session-detail__section-header">
         <h3>Metadata</h3>
-        <span>Expanded view</span>
       </div>
 
       <dl class="session-detail__meta-grid">
@@ -133,9 +118,13 @@ const metaItems = computed(() => {
 
 <style scoped>
 .session-detail {
+  --history-panel-share: 56%;
   display: grid;
-  gap: 1rem;
-  padding: 1.25rem;
+  grid-template-rows: auto minmax(0, var(--history-panel-share)) minmax(0, 1fr);
+  gap: 0.75rem;
+  height: 100%;
+  min-height: 0;
+  padding: 0.9rem 1.15rem 1.1rem;
   border-radius: 1.55rem;
   border: 1px solid var(--border);
   background:
@@ -144,26 +133,17 @@ const metaItems = computed(() => {
   box-shadow: 0 26px 70px rgba(1, 8, 6, 0.34);
 }
 
-.session-detail__header {
-  display: grid;
-}
-
-.session-detail__header-copy {
-  display: grid;
-  gap: 0.55rem;
-}
-
 .session-detail__toolbar {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.85rem;
   align-items: center;
 }
 
 .session-detail__toolbar-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.65rem;
   align-items: center;
 }
 
@@ -171,55 +151,23 @@ const metaItems = computed(() => {
   justify-content: flex-end;
 }
 
-.session-detail__eyebrow {
-  margin: 0;
-  color: var(--accent-soft);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.session-detail__summary {
-  margin: 0;
-  color: var(--text-soft);
-  line-height: 1.75;
-}
-
 .session-detail__toggle {
   display: inline-flex;
   gap: 0.65rem;
   align-items: center;
-  padding: 0.9rem 1rem;
-  border-radius: 1rem;
+  min-height: 2.9rem;
+  padding: 0 1rem;
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(112, 193, 174, 0.14);
   color: var(--heading);
   font-weight: 700;
 }
 
-.session-detail__delete {
-  min-height: 2.9rem;
-  padding: 0 1rem;
-  border: none;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent), #ffb114);
-  color: #05110d;
-  font-weight: 800;
-}
-
 .session-detail__delete:disabled {
-  opacity: 0.45;
   cursor: wait;
 }
 
-.session-detail__stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.8rem;
-}
-
-.session-detail__stat-card,
 .session-detail__section,
 .session-detail__meta-item {
   border-radius: 1.1rem;
@@ -227,30 +175,21 @@ const metaItems = computed(() => {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.session-detail__stat-card {
-  display: grid;
-  gap: 0.45rem;
-  padding: 1rem;
-}
-
-.session-detail__stat-label {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.session-detail__stat-value {
-  color: var(--heading);
-  font-size: 1.02rem;
-  line-height: 1.4;
-}
-
 .session-detail__section {
   display: grid;
-  gap: 1rem;
-  padding: 1rem;
+  gap: 0.85rem;
+  min-height: 0;
+  padding: 0.9rem;
+}
+
+.session-detail__section--history {
+  display: flex;
+  flex-direction: column;
+}
+
+.session-detail__section--metadata {
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .session-detail__section-header {
@@ -276,11 +215,25 @@ const metaItems = computed(() => {
 }
 
 .session-detail__preview-list {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   gap: 0.7rem;
   margin: 0;
   padding: 0;
   list-style: none;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.session-detail__preview-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.session-detail__preview-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .session-detail__preview-item,
@@ -294,11 +247,39 @@ const metaItems = computed(() => {
   line-height: 1.7;
 }
 
+.session-detail__inline-note {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.session-detail__inline-note--error {
+  color: var(--danger);
+}
+
+.session-detail__warning-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--text-muted);
+}
+
 .session-detail__meta-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
   margin: 0;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+
+.session-detail__meta-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.session-detail__meta-grid::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .session-detail__meta-item {
@@ -320,9 +301,16 @@ const metaItems = computed(() => {
   word-break: break-word;
 }
 
-@media (max-width: 980px) {
-  .session-detail__stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+@media (max-height: 860px) {
+  .session-detail {
+    --history-panel-share: 52%;
+    gap: 0.65rem;
+    padding: 0.75rem 0.95rem 0.95rem;
+  }
+
+  .session-detail__section {
+    gap: 0.7rem;
+    padding: 0.82rem;
   }
 }
 
@@ -341,14 +329,13 @@ const metaItems = computed(() => {
   }
 
   .session-detail__toolbar-group--end {
-    justify-content: space-between;
+    justify-content: flex-end;
   }
 
   .session-detail__toolbar-group :deep(.ui-button) {
     flex: 1 1 0;
   }
 
-  .session-detail__stats,
   .session-detail__meta-grid {
     grid-template-columns: minmax(0, 1fr);
   }

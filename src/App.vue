@@ -51,11 +51,26 @@ onMounted(() => {
 
 <style scoped>
 .app-shell {
-  width: min(1400px, calc(100vw - 2rem));
+  width: min(1280px, calc(100vw - 1.25rem));
   margin: 0 auto;
-  padding: 1.4rem 0 2.8rem;
-  display: grid;
+  height: 100dvh;
+  padding: clamp(0.7rem, 1.8vw, 1.4rem) 0 clamp(1rem, 2.4vw, 2.2rem);
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
+  overflow: hidden;
+}
+
+.app-shell :deep(.list-page) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-shell :deep(.detail-page) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .notice-panel {
@@ -142,11 +157,23 @@ onMounted(() => {
 @media (max-width: 720px) {
   .app-shell {
     width: min(100vw - 1rem, 100%);
-    padding-top: 0.6rem;
+    gap: 0.75rem;
   }
 
   .notice-panel {
     border-radius: 1.2rem;
+  }
+}
+
+@media (max-height: 860px) {
+  .app-shell {
+    gap: 0.75rem;
+    padding-top: 0.65rem;
+    padding-bottom: 0.85rem;
+  }
+
+  .notice-panel {
+    padding: 1rem;
   }
 }
 </style>

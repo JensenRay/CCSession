@@ -39,12 +39,12 @@ watchEffect(() => {
 <template>
   <aside class="session-list" aria-label="Codex sessions">
     <header class="session-list__header">
-      <div>
+      <div class="session-list__header-copy">
         <p class="session-list__eyebrow">Session List</p>
+        <p class="session-list__summary">
+          {{ selectedIds.length }} selected / {{ sessions.length }} total
+        </p>
       </div>
-      <p class="session-list__summary">
-        {{ selectedIds.length }} selected / {{ sessions.length }} total
-      </p>
 
       <div class="session-list__toolbar">
         <button class="ui-button ui-button--danger" type="button" :disabled="!canBulkDelete"
@@ -76,7 +76,10 @@ watchEffect(() => {
   position: sticky;
   top: 1rem;
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 1rem;
+  height: 100%;
+  min-height: 0;
   padding: 1.15rem;
   border-radius: 1.55rem;
   border: 1px solid var(--border);
@@ -88,7 +91,15 @@ watchEffect(() => {
 
 .session-list__header {
   display: grid;
-  gap: 0.5rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+}
+
+.session-list__header-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.35rem;
 }
 
 .session-list__eyebrow {
@@ -110,6 +121,7 @@ watchEffect(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+  justify-content: flex-end;
 }
 
 .session-list__select-all {
@@ -127,7 +139,7 @@ watchEffect(() => {
 .session-list__items {
   display: grid;
   gap: 0.85rem;
-  max-height: calc(100vh - 13rem);
+  min-height: 0;
   overflow: auto;
   padding-right: 0.2rem;
 }
@@ -144,18 +156,38 @@ watchEffect(() => {
 @media (max-width: 980px) {
   .session-list {
     position: static;
+    height: auto;
   }
 
-  .session-list__toolbar {
-    flex-direction: column;
-  }
-
-  .session-list__toolbar .ui-button {
-    width: 100%;
+  .session-list__header {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .session-list__items {
     max-height: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .session-list__toolbar {
+    flex-wrap: nowrap;
+  }
+
+  .session-list__toolbar .ui-button {
+    flex: 0 1 auto;
+    min-width: 0;
+    padding-inline: 0.95rem;
+  }
+}
+
+@media (max-height: 860px) {
+  .session-list {
+    gap: 0.85rem;
+    padding: 1rem;
+  }
+
+  .session-list__select-all {
+    padding: 0.78rem 0.9rem;
   }
 }
 </style>

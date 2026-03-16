@@ -4,6 +4,7 @@ import {
   deleteSessions,
   listSessions,
 } from "../api/sessions";
+import { getCompactSessionSummary } from "../utils/sessionFormat";
 import type {
   DeleteSessionsData,
   ListSessionsData,
@@ -48,7 +49,7 @@ const deleteDialogItems = computed(() =>
   pendingDeleteSessions.value.map((session) => ({
     id: session.id,
     title: session.title || session.id,
-    summary: session.summary || "No summary available.",
+    summary: getCompactSessionSummary(session, 140),
   })),
 );
 const deleteDialogTitle = computed(() =>

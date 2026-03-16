@@ -22,6 +22,18 @@ export function getSessionSummary(
   return session.summary.trim() || "No summary available.";
 }
 
+export function getCompactSessionSummary(
+  session: Pick<SessionListItem, "summary">,
+  maxLength = 120,
+): string {
+  const summary = getSessionSummary(session);
+  if (summary.length <= maxLength) {
+    return summary;
+  }
+
+  return `${summary.slice(0, maxLength).trimEnd()}…`;
+}
+
 export function formatFullTimestamp(timestamp: number): string {
   return fullDateTimeFormatter.format(timestamp * 1000);
 }

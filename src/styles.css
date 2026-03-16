@@ -34,12 +34,14 @@
 html,
 body,
 #app {
-  min-height: 100%;
+  height: 100dvh;
+  min-height: 100dvh;
 }
 
 body {
   margin: 0;
   min-width: 320px;
+  overflow: hidden;
   background:
     radial-gradient(circle at top left, rgba(55, 193, 218, 0.12), transparent 28%),
     radial-gradient(circle at top right, rgba(255, 201, 71, 0.12), transparent 24%),
