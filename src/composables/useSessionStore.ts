@@ -58,8 +58,8 @@ const deleteDialogTitle = computed(() =>
 );
 const deleteDialogDescription = computed(() =>
   pendingDeleteSessions.value.length > 1
-    ? "Each selected session will be removed from the thread index together with related history rows, structured logs, rollout files, and shell snapshots."
-    : "This removes the selected session from the thread index and also asks the backend to clean its related history, logs, rollout file, and shell snapshot.",
+    ? "Each selected session will be removed from the thread index together with related history rows, structured logs, and shell snapshots. The rollout JSONL file will be moved to Trash so it can still be recovered."
+    : "This removes the selected session from the thread index and cleans its related history, logs, and shell snapshot. The rollout JSONL file will be moved to Trash so it can still be recovered.",
 );
 const deleteDialogConfirmLabel = computed(() =>
   pendingDeleteSessions.value.length > 1 ? "Delete Selected" : "Delete Session",
@@ -170,11 +170,15 @@ function createDeleteNotice(result: DeleteSessionsData): ActionNotice {
         : "success";
   const title =
     result.requestedCount > 1
-      ? "Batch delete finished"
+      ? tone === "success"
+        ? "Batch delete finished"
+        : tone === "warning"
+          ? "Batch delete finished with warnings"
+          : "Batch delete failed"
       : tone === "success"
         ? "Session deleted"
         : tone === "warning"
-          ? "Session deletion needs review"
+          ? "Session deleted with warnings"
           : "Session deletion failed";
 
   return {

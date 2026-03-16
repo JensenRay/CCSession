@@ -28,7 +28,8 @@ const emit = defineEmits<{
           <p class="dialog-panel__eyebrow">Delete Confirmation</p>
           <h2 class="dialog-panel__title">{{ title }}</h2>
         </div>
-        <button class="dialog-panel__close" type="button" :disabled="busy" @click="emit('close')">
+        <button class="ui-button ui-button--ghost dialog-panel__close" type="button" :disabled="busy"
+          @click="emit('close')">
           Close
         </button>
       </header>
@@ -39,7 +40,7 @@ const emit = defineEmits<{
         <p class="dialog-panel__warning-title">Before deleting</p>
         <ul class="dialog-panel__warning-list">
           <li>请先退出 Codex，避免 SQLite 和本地文件仍在被写入。</li>
-          <li>前端只会调用 `delete_sessions`，不会在本地额外推断删除行为。</li>
+          <li>rollout JSONL 会移到回收站，方便误删后手动恢复主要对话内容。</li>
         </ul>
       </section>
 
@@ -52,10 +53,12 @@ const emit = defineEmits<{
       </ul>
 
       <footer class="dialog-panel__footer">
-        <button class="dialog-panel__secondary" type="button" :disabled="busy" @click="emit('close')">
+        <button class="ui-button ui-button--ghost dialog-panel__secondary" type="button" :disabled="busy"
+          @click="emit('close')">
           Cancel
         </button>
-        <button class="dialog-panel__primary" type="button" :disabled="busy" @click="emit('confirm')">
+        <button class="ui-button ui-button--danger dialog-panel__primary" type="button" :disabled="busy"
+          @click="emit('confirm')">
           {{ busy ? "Deleting..." : confirmLabel }}
         </button>
       </footer>
@@ -81,9 +84,11 @@ const emit = defineEmits<{
   gap: 1rem;
   padding: 1.35rem;
   border-radius: 1.3rem;
-  border: 1px solid rgba(105, 74, 48, 0.12);
-  background: rgba(255, 251, 245, 0.98);
-  box-shadow: 0 28px 80px rgba(43, 28, 18, 0.24);
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, rgba(13, 31, 24, 0.98), rgba(8, 18, 15, 0.99)),
+    var(--panel);
+  box-shadow: 0 28px 80px rgba(1, 8, 6, 0.4);
 }
 
 .dialog-panel__header,
@@ -112,21 +117,6 @@ const emit = defineEmits<{
 .dialog-panel__secondary,
 .dialog-panel__primary {
   min-height: 2.75rem;
-  padding: 0 1rem;
-  border-radius: 999px;
-  font-weight: 700;
-  border: none;
-}
-
-.dialog-panel__close,
-.dialog-panel__secondary {
-  background: rgba(105, 74, 48, 0.08);
-  color: var(--heading);
-}
-
-.dialog-panel__primary {
-  background: linear-gradient(135deg, var(--danger), #a3472f);
-  color: #fff;
 }
 
 .dialog-panel__description {
@@ -138,13 +128,15 @@ const emit = defineEmits<{
 .dialog-panel__warning {
   padding: 0.95rem 1rem;
   border-radius: 1rem;
-  background: rgba(255, 244, 226, 0.88);
-  border: 1px solid rgba(159, 112, 0, 0.18);
+  border: 1px solid rgba(255, 201, 71, 0.16);
+  background:
+    linear-gradient(180deg, rgba(49, 41, 8, 0.78), rgba(22, 18, 6, 0.82)),
+    rgba(255, 255, 255, 0.03);
 }
 
 .dialog-panel__warning-title {
   margin: 0 0 0.65rem;
-  color: #805300;
+  color: var(--accent);
   font-weight: 700;
 }
 
@@ -166,8 +158,8 @@ const emit = defineEmits<{
 .dialog-panel__item {
   padding: 0.9rem 1rem;
   border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.74);
-  border: 1px solid rgba(105, 74, 48, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(112, 193, 174, 0.1);
 }
 
 .dialog-panel__item h3,
@@ -192,8 +184,8 @@ const emit = defineEmits<{
   margin-top: 0.65rem;
   padding: 0.18rem 0.45rem;
   border-radius: 999px;
-  background: rgba(105, 74, 48, 0.08);
-  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent);
 }
 
 @media (max-width: 640px) {
