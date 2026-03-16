@@ -22,12 +22,7 @@ const emit = defineEmits<{
 
 <template>
   <div v-if="open" class="dialog-backdrop" @click.self="emit('close')">
-    <section
-      class="dialog-panel"
-      role="dialog"
-      aria-modal="true"
-      :aria-label="title"
-    >
+    <section class="dialog-panel" role="dialog" aria-modal="true" :aria-label="title">
       <header class="dialog-panel__header">
         <div>
           <p class="dialog-panel__eyebrow">Delete Confirmation</p>

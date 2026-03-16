@@ -1,19 +1,22 @@
 <script setup lang="ts">
 import { computed, ref, watchEffect } from "vue";
-import SessionRow from "./SessionRow.vue";
 import type { SessionListItem } from "../types";
+import SessionRow from "./SessionRow.vue";
 
 const props = defineProps<{
   sessions: SessionListItem[];
   selectedIds: string[];
-  activeSessionId: string;
   selectionDisabled?: boolean;
+  loading?: boolean;
+  canBulkDelete?: boolean;
 }>();
 
 const emit = defineEmits<{
   (event: "toggle-all"): void;
   (event: "toggle-select", sessionId: string): void;
   (event: "open-session", sessionId: string): void;
+  (event: "refresh"): void;
+  (event: "request-batch-delete"): void;
 }>();
 
 const selectAllRef = ref<HTMLInputElement | null>(null);
@@ -38,35 +41,32 @@ watchEffect(() => {
     <header class="session-list__header">
       <div>
         <p class="session-list__eyebrow">Session List</p>
-        <h2 class="session-list__title">Compact cards first</h2>
       </div>
       <p class="session-list__summary">
         {{ selectedIds.length }} selected / {{ sessions.length }} total
       </p>
+
+      <div class="session-list__toolbar">
+        <button class="ui-button ui-button--danger" type="button" :disabled="!canBulkDelete"
+          @click="emit('request-batch-delete')">
+          Delete Selected
+        </button>
+        <button class="ui-button" type="button" :disabled="loading" @click="emit('refresh')">
+          {{ loading ? "Refreshing..." : "Refresh" }}
+        </button>
+      </div>
     </header>
 
     <label class="session-list__select-all">
-      <input
-        ref="selectAllRef"
-        type="checkbox"
-        :checked="allSelected"
-        :disabled="selectionDisabled || !sessions.length"
-        @change="emit('toggle-all')"
-      />
+      <input ref="selectAllRef" type="checkbox" :checked="allSelected" :disabled="selectionDisabled || !sessions.length"
+        @change="emit('toggle-all')" />
       <span>Select every visible session</span>
     </label>
 
     <div class="session-list__items">
-      <SessionRow
-        v-for="session in sessions"
-        :key="session.id"
-        :session="session"
-        :selected="selectedIds.includes(session.id)"
-        :is-active="activeSessionId === session.id"
-        :selection-disabled="selectionDisabled"
-        @toggle-select="emit('toggle-select', $event)"
-        @open-session="emit('open-session', $event)"
-      />
+      <SessionRow v-for="session in sessions" :key="session.id" :session="session"
+        :selected="selectedIds.includes(session.id)" :selection-disabled="selectionDisabled"
+        @toggle-select="emit('toggle-select', $event)" @open-session="emit('open-session', $event)" />
     </div>
   </aside>
 </template>
@@ -100,16 +100,16 @@ watchEffect(() => {
   text-transform: uppercase;
 }
 
-.session-list__title {
-  margin: 0;
-  color: var(--heading);
-  font-size: 1.15rem;
-}
-
 .session-list__summary {
   margin: 0;
   color: var(--text-soft);
   line-height: 1.6;
+}
+
+.session-list__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 
 .session-list__select-all {
@@ -144,6 +144,14 @@ watchEffect(() => {
 @media (max-width: 980px) {
   .session-list {
     position: static;
+  }
+
+  .session-list__toolbar {
+    flex-direction: column;
+  }
+
+  .session-list__toolbar .ui-button {
+    width: 100%;
   }
 
   .session-list__items {

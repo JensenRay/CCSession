@@ -13,7 +13,7 @@ use crate::{
     models::{ApiError, ApiErrorCode, ListSessionsData, ListSessionsRequest, SessionListItem},
 };
 
-const CONTENT_PREVIEW_LIMIT: usize = 5;
+const CONTENT_PREVIEW_LIMIT: usize = 12;
 
 #[derive(Debug, Clone)]
 struct ThreadRow {
@@ -290,5 +290,51 @@ mod tests {
         assert!(data.sessions[0].has_rollout);
         assert!(data.sessions[0].has_snapshot);
         assert_eq!(data.sessions[1].summary, "Older title");
+    }
+
+    #[test]
+    fn keeps_the_most_recent_twelve_preview_entries() {
+        let fixture = create_test_codex_root();
+
+        touch_rollout(&fixture, "2026/03/15/rollout-session-a.jsonl");
+
+        insert_thread(
+            &fixture,
+            "session-a",
+            "Preview title",
+            "first message",
+            "/tmp/project-a",
+            "2026/03/15/rollout-session-a.jsonl",
+            110,
+            240,
+            4,
+            false,
+        );
+
+        for index in 0..15 {
+            append_history(
+                &fixture,
+                "session-a",
+                index as i64,
+                &format!("line-{index}"),
+            );
+        }
+
+        let data = list_sessions_with_paths(
+            &fixture.paths,
+            ListSessionsRequest {
+                include_archived: true,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            data.sessions[0].content_preview,
+            vec![
+                "line-3", "line-4", "line-5", "line-6", "line-7", "line-8", "line-9", "line-10",
+                "line-11", "line-12", "line-13", "line-14"
+            ]
+        );
+        assert_eq!(data.sessions[0].history_count, 15);
     }
 }

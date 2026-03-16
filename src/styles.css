@@ -63,6 +63,60 @@ input {
   accent-color: var(--accent);
 }
 
+code {
+  font-family:
+    ui-monospace,
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+}
+
+.ui-button {
+  min-height: 2.9rem;
+  padding: 0 1.1rem;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent-soft), #0b93ab);
+  color: #05110d;
+  font-weight: 800;
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    opacity 150ms ease,
+    background 150ms ease,
+    color 150ms ease,
+    border-color 150ms ease;
+}
+
+.ui-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 32px rgba(55, 193, 218, 0.2);
+}
+
+.ui-button:disabled {
+  opacity: 0.45;
+  cursor: wait;
+  transform: none;
+  box-shadow: none;
+}
+
+.ui-button--ghost {
+  border: 1px solid rgba(112, 193, 174, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--heading);
+}
+
+.ui-button--ghost:hover {
+  box-shadow: 0 16px 32px rgba(1, 8, 6, 0.18);
+}
+
+.ui-button--danger {
+  background: linear-gradient(135deg, var(--accent), #ffb114);
+}
+
 ::selection {
   background: rgba(255, 201, 71, 0.28);
   color: var(--heading);

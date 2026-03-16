@@ -31,9 +31,7 @@ const selectedIds = ref<string[]>([]);
 const actionNotice = ref<ActionNotice | null>(null);
 
 const sessions = computed(() => sessionsData.value?.sessions ?? []);
-const total = computed(() => sessionsData.value?.total ?? 0);
 const warnings = computed(() => sessionsData.value?.warnings ?? []);
-const selectedCount = computed(() => selectedIds.value.length);
 const allSelected = computed(
   () =>
     sessions.value.length > 0 &&
@@ -82,23 +80,6 @@ const summaryReports = computed(
         Boolean(report.error),
     ) ?? [],
 );
-const selectedSummaryLabel = computed(() => {
-  if (!selectedIds.value.length) {
-    return "No sessions queued for batch delete";
-  }
-
-  return `${selectedIds.value.length} sessions queued`;
-});
-const scannedAtLabel = computed(() => {
-  if (!sessionsData.value?.scannedAt) {
-    return "Not scanned yet";
-  }
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(sessionsData.value.scannedAt * 1000);
-});
 
 async function ensureSessionsLoaded(force = false): Promise<void> {
   if (force || (!hasLoaded.value && !loading.value)) {
@@ -123,9 +104,9 @@ async function refreshSessions(): Promise<void> {
       error instanceof SessionCommandError
         ? error
         : new SessionCommandError(
-            "command_rejected",
-            "The session list could not be loaded.",
-          );
+          "command_rejected",
+          "The session list could not be loaded.",
+        );
 
     errorMessage.value = [commandError.message, ...commandError.details].join(
       "\n",
@@ -234,9 +215,9 @@ async function confirmDelete(): Promise<void> {
       error instanceof SessionCommandError
         ? error
         : new SessionCommandError(
-            "command_rejected",
-            "The delete request was rejected.",
-          );
+          "command_rejected",
+          "The delete request was rejected.",
+        );
 
     actionNotice.value = {
       tone: "error",
@@ -251,20 +232,15 @@ async function confirmDelete(): Promise<void> {
 }
 
 const sessionStore = reactive({
-  sessionsData,
   sessions,
-  total,
   warnings,
   loading,
   errorMessage,
   selectedIds,
-  selectedCount,
   activeDeleteIds,
   pendingDeleteIds,
   actionNotice,
   summaryReports,
-  scannedAtLabel,
-  selectedSummaryLabel,
   deleteDialogItems,
   deleteDialogTitle,
   deleteDialogDescription,

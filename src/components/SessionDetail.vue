@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { SessionListItem } from "../types";
+import {
+  formatCount,
+  formatFullTimestamp,
+  getSessionSummary,
+} from "../utils/sessionFormat";
 
 const props = defineProps<{
   session: SessionListItem | null;
@@ -15,50 +20,29 @@ const emit = defineEmits<{
   (event: "request-delete", sessionId: string): void;
 }>();
 
-const title = computed(
-  () => props.session?.title.trim() || props.session?.id || "No session selected",
-);
-const summary = computed(
-  () => props.session?.summary.trim() || "No summary available.",
+const summary = computed(() =>
+  props.session ? getSessionSummary(props.session) : "No summary available.",
 );
 const updatedAtLabel = computed(() =>
-  props.session ? formatTimestamp(props.session.updatedAt) : "",
+  props.session ? formatFullTimestamp(props.session.updatedAt) : "",
 );
 const createdAtLabel = computed(() =>
-  props.session ? formatTimestamp(props.session.createdAt) : "",
+  props.session ? formatFullTimestamp(props.session.createdAt) : "",
 );
-const detailBadges = computed(() => {
-  if (!props.session) {
-    return [];
-  }
-
-  return [
-    {
-      label: props.session.archived ? "Archived" : "Live session",
-      tone: props.session.archived ? "muted" : "neutral",
-    },
-    {
-      label: props.session.hasRollout ? "Rollout ready" : "Rollout missing",
-      tone: props.session.hasRollout ? "neutral" : "warning",
-    },
-    {
-      label: props.session.hasSnapshot ? "Snapshot ready" : "Snapshot missing",
-      tone: props.session.hasSnapshot ? "neutral" : "warning",
-    },
-    {
-      label: props.session.modelProvider || "Unknown provider",
-      tone: "accent",
-    },
-  ];
-});
 const statCards = computed(() => {
   if (!props.session) {
     return [];
   }
 
   return [
-    { label: "History entries", value: formatCount(props.session.historyCount) },
-    { label: "Structured logs", value: formatCount(props.session.structuredLogCount) },
+    {
+      label: "History entries",
+      value: formatCount(props.session.historyCount),
+    },
+    {
+      label: "Structured logs",
+      value: formatCount(props.session.structuredLogCount),
+    },
     { label: "Tokens used", value: formatCount(props.session.tokensUsed) },
     { label: "Updated", value: updatedAtLabel.value },
   ];
@@ -77,67 +61,38 @@ const metaItems = computed(() => {
     { label: "Provider", value: props.session.modelProvider || "Unknown" },
   ];
 });
-
-function formatTimestamp(timestamp: number): string {
-  return new Intl.DateTimeFormat("zh-CN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(timestamp * 1000);
-}
-
-function formatCount(value: number): string {
-  return new Intl.NumberFormat("en-US").format(value);
-}
 </script>
 
 <template>
   <section v-if="session" class="session-detail">
-    <header class="session-detail__header">
-      <div class="session-detail__header-copy">
-        <p class="session-detail__eyebrow">Session Detail</p>
-        <h2 class="session-detail__title">{{ title }}</h2>
-        <p class="session-detail__summary">{{ summary }}</p>
+    <div class="session-detail__toolbar">
+      <div class="session-detail__toolbar-group">
+        <slot name="toolbar-start" />
       </div>
 
-      <div class="session-detail__actions">
+      <div class="session-detail__toolbar-group session-detail__toolbar-group--end">
         <label class="session-detail__toggle">
-          <input
-            type="checkbox"
-            :checked="selected"
-            :disabled="selectionDisabled"
-            @change="emit('toggle-select', session.id)"
-          />
+          <input type="checkbox" :checked="selected" :disabled="selectionDisabled"
+            @change="emit('toggle-select', session.id)" />
           <span>Include in batch delete</span>
         </label>
 
-        <button
-          class="session-detail__delete"
-          type="button"
-          :disabled="deleteDisabled"
-          @click="emit('request-delete', session.id)"
-        >
+        <button class="session-detail__delete" type="button" :disabled="deleteDisabled"
+          @click="emit('request-delete', session.id)">
           {{ isDeleting ? "Deleting..." : "Delete Session" }}
         </button>
       </div>
-    </header>
-
-    <div class="session-detail__badge-row">
-      <span
-        v-for="badge in detailBadges"
-        :key="badge.label"
-        class="session-detail__badge"
-        :data-tone="badge.tone"
-      >
-        {{ badge.label }}
-      </span>
     </div>
 
+    <header class="session-detail__header">
+      <div class="session-detail__header-copy">
+        <p class="session-detail__eyebrow">Session Detail</p>
+        <p class="session-detail__summary">{{ summary }}</p>
+      </div>
+    </header>
+
     <section class="session-detail__stats">
-      <article
-        v-for="stat in statCards"
-        :key="stat.label"
-        class="session-detail__stat-card"
-      >
+      <article v-for="stat in statCards" :key="stat.label" class="session-detail__stat-card">
         <span class="session-detail__stat-label">{{ stat.label }}</span>
         <strong class="session-detail__stat-value">{{ stat.value }}</strong>
       </article>
@@ -150,11 +105,8 @@ function formatCount(value: number): string {
       </div>
 
       <ul v-if="session.contentPreview.length" class="session-detail__preview-list">
-        <li
-          v-for="item in session.contentPreview"
-          :key="item"
-          class="session-detail__preview-item"
-        >
+        <li v-for="(item, index) in session.contentPreview" :key="`${session.id}-${index}`"
+          class="session-detail__preview-item">
           {{ item }}
         </li>
       </ul>
@@ -170,11 +122,7 @@ function formatCount(value: number): string {
       </div>
 
       <dl class="session-detail__meta-grid">
-        <div
-          v-for="item in metaItems"
-          :key="item.label"
-          class="session-detail__meta-item"
-        >
+        <div v-for="item in metaItems" :key="item.label" class="session-detail__meta-item">
           <dt>{{ item.label }}</dt>
           <dd>{{ item.value }}</dd>
         </div>
@@ -197,15 +145,30 @@ function formatCount(value: number): string {
 }
 
 .session-detail__header {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: flex-start;
+  display: grid;
 }
 
 .session-detail__header-copy {
   display: grid;
   gap: 0.55rem;
+}
+
+.session-detail__toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.session-detail__toolbar-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.session-detail__toolbar-group--end {
+  justify-content: flex-end;
 }
 
 .session-detail__eyebrow {
@@ -217,23 +180,10 @@ function formatCount(value: number): string {
   text-transform: uppercase;
 }
 
-.session-detail__title {
-  margin: 0;
-  color: var(--heading);
-  font-size: clamp(1.5rem, 3vw, 2.35rem);
-  line-height: 1.08;
-}
-
 .session-detail__summary {
   margin: 0;
   color: var(--text-soft);
   line-height: 1.75;
-}
-
-.session-detail__actions {
-  display: grid;
-  gap: 0.75rem;
-  min-width: 240px;
 }
 
 .session-detail__toggle {
@@ -261,39 +211,6 @@ function formatCount(value: number): string {
 .session-detail__delete:disabled {
   opacity: 0.45;
   cursor: wait;
-}
-
-.session-detail__badge-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.65rem;
-}
-
-.session-detail__badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2rem;
-  padding: 0 0.78rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--heading);
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.session-detail__badge[data-tone="accent"] {
-  background: rgba(55, 193, 218, 0.14);
-  color: var(--accent-soft);
-}
-
-.session-detail__badge[data-tone="warning"] {
-  background: rgba(255, 201, 71, 0.16);
-  color: var(--accent);
-}
-
-.session-detail__badge[data-tone="muted"] {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--text-muted);
 }
 
 .session-detail__stats {
@@ -360,7 +277,7 @@ function formatCount(value: number): string {
 
 .session-detail__preview-list {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.7rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -369,8 +286,8 @@ function formatCount(value: number): string {
 .session-detail__preview-item,
 .session-detail__empty {
   margin: 0;
-  padding: 0.9rem 1rem;
-  border-radius: 1rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.95rem;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(112, 193, 174, 0.1);
   color: var(--text-soft);
@@ -380,31 +297,30 @@ function formatCount(value: number): string {
 .session-detail__meta-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.8rem;
+  gap: 0.75rem;
   margin: 0;
 }
 
 .session-detail__meta-item {
-  padding: 0.95rem;
+  padding: 0.9rem 1rem;
 }
 
 .session-detail__meta-item dt {
-  margin: 0 0 0.4rem;
   color: var(--text-muted);
   font-size: 0.76rem;
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .session-detail__meta-item dd {
-  margin: 0;
+  margin: 0.45rem 0 0;
   color: var(--heading);
-  line-height: 1.7;
+  line-height: 1.65;
   word-break: break-word;
 }
 
-@media (max-width: 1120px) {
+@media (max-width: 980px) {
   .session-detail__stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -413,16 +329,23 @@ function formatCount(value: number): string {
 @media (max-width: 760px) {
   .session-detail {
     padding: 1rem;
-    border-radius: 1.2rem;
   }
 
-  .session-detail__header {
+  .session-detail__toolbar {
     flex-direction: column;
+    align-items: stretch;
   }
 
-  .session-detail__actions {
+  .session-detail__toolbar-group {
     width: 100%;
-    min-width: 0;
+  }
+
+  .session-detail__toolbar-group--end {
+    justify-content: space-between;
+  }
+
+  .session-detail__toolbar-group :deep(.ui-button) {
+    flex: 1 1 0;
   }
 
   .session-detail__stats,
