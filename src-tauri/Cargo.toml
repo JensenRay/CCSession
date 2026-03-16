@@ -1,6 +1,6 @@
 [package]
 name = "ccsession"
-version = "1.0.0"
+version = "1.0.1"
 description = "A Tauri app to clear codex sessions."
 edition = "2021"
 license = "MIT"
