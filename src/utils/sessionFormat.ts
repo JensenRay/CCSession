@@ -1,6 +1,6 @@
 import type { SessionListItem } from "../types";
 
-const fullDateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
+const fullDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
   dateStyle: "medium",
   timeStyle: "short",
 });
