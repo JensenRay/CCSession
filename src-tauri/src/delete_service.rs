@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use rusqlite::{params, Connection, Error as SqlError, ErrorCode};
@@ -210,7 +210,7 @@ pub(crate) fn delete_sessions_with_paths(
             .expect("delete report must exist for file cleanup");
 
         if let Some(rollout_path) = &plan.rollout_path {
-            match delete_optional_file(rollout_path) {
+            match trash_optional_file(rollout_path) {
                 Ok(Some(true)) => {
                     report.deleted_rollout_file = true;
                 }
@@ -339,6 +339,71 @@ fn delete_optional_file(path: &PathBuf) -> Result<Option<bool>, String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Some(false)),
         Err(error) => Err(format!("failed to delete {}: {}", path.display(), error)),
     }
+}
+
+fn trash_optional_file(path: &Path) -> Result<Option<bool>, String> {
+    if !path.exists() {
+        return Ok(Some(false));
+    }
+
+    move_to_trash(path).map(|()| Some(true))
+}
+
+#[cfg(not(test))]
+fn move_to_trash(path: &Path) -> Result<(), String> {
+    trash::delete(path)
+        .map_err(|error| format!("failed to move {} to trash: {}", path.display(), error))
+}
+
+#[cfg(test)]
+fn move_to_trash(path: &Path) -> Result<(), String> {
+    let codex_root = path
+        .ancestors()
+        .find(|ancestor| ancestor.file_name().is_some_and(|name| name == ".codex"))
+        .ok_or_else(|| {
+            format!(
+                "failed to locate a test trash directory for {}",
+                path.display()
+            )
+        })?;
+    let trash_root = codex_root.join(".trash");
+    fs::create_dir_all(&trash_root).map_err(|error| {
+        format!(
+            "failed to prepare the test trash directory {}: {}",
+            trash_root.display(),
+            error
+        )
+    })?;
+
+    let file_name = path.file_name().ok_or_else(|| {
+        format!(
+            "failed to move {} to trash: file name is missing",
+            path.display()
+        )
+    })?;
+    let mut trash_path = trash_root.join(file_name);
+
+    if trash_path.exists() {
+        let stem = path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or("rollout");
+        let extension = path.extension().and_then(|extension| extension.to_str());
+        let file_name = match extension {
+            Some(extension) => format!("{stem}-trashed.{extension}"),
+            None => format!("{stem}-trashed"),
+        };
+        trash_path = trash_root.join(file_name);
+    }
+
+    fs::rename(path, &trash_path).map_err(|error| {
+        format!(
+            "failed to move {} to trash at {}: {}",
+            path.display(),
+            trash_path.display(),
+            error
+        )
+    })
 }
 
 fn ensure_database_is_writable(
@@ -511,6 +576,11 @@ mod tests {
         assert_eq!(deleted.deleted_structured_log_rows, 1);
         assert!(deleted.deleted_rollout_file);
         assert!(deleted.deleted_snapshot_file);
+        assert!(!fixture
+            .root
+            .join("sessions/2026/03/15/rollout-session-a.jsonl")
+            .exists());
+        assert!(fixture.root.join(".trash/rollout-session-a.jsonl").exists());
 
         let missing = &result.reports[1];
         assert_eq!(missing.status, SessionDeleteStatus::NotFound);
