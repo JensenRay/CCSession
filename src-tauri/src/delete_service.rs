@@ -285,11 +285,7 @@ fn cleanup_deleted_files(
                 Ok(Some(true)) => {
                     report.deleted_snapshot_file = true;
                 }
-                Ok(Some(false)) => {
-                    report
-                        .warnings
-                        .push("snapshot file was missing before deletion".to_string());
-                }
+                Ok(Some(false)) => {}
                 Ok(None) => {}
                 Err(error) => append_report_error(report, error),
             }
@@ -652,5 +648,41 @@ mod tests {
         assert_eq!(result.deleted_count, 1);
         assert!(read_history_file(&fixture).contains("{\"session_id\":\"broken\""));
         assert!(!read_history_file(&fixture).contains("\"session_id\":\"session-a\""));
+    }
+
+    #[test]
+    fn missing_snapshot_does_not_downgrade_a_successful_delete() {
+        let fixture = create_test_codex_root();
+
+        touch_rollout(&fixture, "2026/03/15/rollout-session-a.jsonl");
+        insert_thread(
+            &fixture,
+            "session-a",
+            "Title A",
+            "Preview A",
+            "/tmp/a",
+            "2026/03/15/rollout-session-a.jsonl",
+            10,
+            20,
+            1,
+            false,
+        );
+        append_history(&fixture, "session-a", 1, "a-1");
+        insert_log(&fixture, "session-a", "message", 1);
+
+        let result = delete_sessions_with_paths(
+            &fixture.paths,
+            DeleteSessionsRequest {
+                session_ids: vec!["session-a".to_string()],
+                require_codex_stopped: false,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.deleted_count, 1);
+        assert_eq!(result.partial_failure_count, 0);
+        assert_eq!(result.reports[0].status, SessionDeleteStatus::Deleted);
+        assert!(!result.reports[0].deleted_snapshot_file);
+        assert!(result.reports[0].warnings.is_empty());
     }
 }
