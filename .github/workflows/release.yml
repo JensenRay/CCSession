@@ -15,8 +15,13 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
+            args: --target aarch64-apple-darwin
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
           - platform: ubuntu-22.04
+            args: ""
           - platform: windows-latest
+            args: ""
 
     runs-on: ${{ matrix.platform }}
 
@@ -37,19 +42,20 @@ jobs:
             libssl-dev \
             file
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: lts/*
-          package-manager-cache: false
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Setup Rust
+        if: matrix.platform != 'macos-latest'
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Rust macOS targets
+        if: matrix.platform == 'macos-latest'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Restore Rust cache
         uses: swatinem/rust-cache@v2
@@ -60,12 +66,13 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build and publish Tauri release
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v__VERSION__
           releaseName: CCSession v__VERSION__
+          args: ${{ matrix.args }}
           releaseBody: |
             CCSession release binaries are unsigned.
 

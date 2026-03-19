@@ -14,12 +14,6 @@ The goal is simple: keep `~/.codex` clean and easier to manage.
 - Rollout `rollout-*.jsonl` files (move to Trash)
 - Shell snapshot files
 
-## Tech Stack
-
-- App: Tauri 2 + TypeScript + Vue3 + Vue Router + Vite
-- Local data access: `rusqlite` + standard filesystem APIs
-- Trash support: Rust `trash` crate
-
 ## Install
 
 If you're using Homebrew on macOS, you can install it with:
@@ -29,13 +23,14 @@ brew tap jensenray/toys
 brew install --cask ccsession
 ```
 
-Uninstall is easy too:
+Other installation methods can be found on the Releases page.
+
+## Uninstall
 
 ```bash
 brew uninstall --cask --zap ccsession
+brew untap jensenray/toys
 ```
-
-Other installation methods can be found on the Releases page.
 
 ## Unsigned Builds
 
@@ -57,26 +52,30 @@ If you do not trust the prebuilt binaries, the best option is to build the app y
 
 - [System Dependencies](https://v2.tauri.app/start/prerequisites/#system-dependencies)
 - [Rust](https://v2.tauri.app/start/prerequisites/#rust)
-- Node ecosystem ([Node](https://nodejs.org), [Bun](https://bun.com) or others)
+- [Bun](https://bun.com)
 
-### Clone Porject
+### Clone Project
 
 ```bash
 git clone https://github.com/JensenRay/CCSession.git
 cd CCSession
 ```
 
-### Development
+and
 
 ```bash
 bun install
+```
+
+### Development
+
+```bash
 bun tauri dev
 ```
 
 ### Production Build
 
 ```bash
-bun install
 bun tauri build
 ```
 

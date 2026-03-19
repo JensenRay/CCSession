@@ -10,7 +10,6 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct ThreadRow {
     pub id: String,
-    pub rollout_path: String,
     pub created_at: i64,
     pub updated_at: i64,
     pub source: String,
@@ -59,12 +58,12 @@ pub fn load_threads(
     include_archived: bool,
 ) -> Result<Vec<ThreadRow>, ApiError> {
     let sql = if include_archived {
-        "SELECT id, rollout_path, created_at, updated_at, source, model_provider, cwd, title, \
+        "SELECT id, created_at, updated_at, source, model_provider, cwd, title, \
          first_user_message, tokens_used, archived \
          FROM threads \
          ORDER BY updated_at DESC, id DESC"
     } else {
-        "SELECT id, rollout_path, created_at, updated_at, source, model_provider, cwd, title, \
+        "SELECT id, created_at, updated_at, source, model_provider, cwd, title, \
          first_user_message, tokens_used, archived \
          FROM threads \
          WHERE archived = 0 \
@@ -81,18 +80,17 @@ pub fn load_threads(
 
     let rows = statement
         .query_map([], |row| {
-            let archived: i64 = row.get(10)?;
+            let archived: i64 = row.get(9)?;
             Ok(ThreadRow {
                 id: row.get(0)?,
-                rollout_path: row.get(1)?,
-                created_at: row.get(2)?,
-                updated_at: row.get(3)?,
-                source: row.get(4)?,
-                model_provider: row.get(5)?,
-                cwd: row.get(6)?,
-                title: row.get(7)?,
-                first_user_message: row.get(8)?,
-                tokens_used: row.get(9)?,
+                created_at: row.get(1)?,
+                updated_at: row.get(2)?,
+                source: row.get(3)?,
+                model_provider: row.get(4)?,
+                cwd: row.get(5)?,
+                title: row.get(6)?,
+                first_user_message: row.get(7)?,
+                tokens_used: row.get(8)?,
                 archived: archived != 0,
             })
         })

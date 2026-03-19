@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import SessionDetail from "../components/SessionDetail.vue";
-import StatePanel from "../components/StatePanel.vue";
+import { NFlex } from "naive-ui";
+import SessionDetailHeader from "../components/session/SessionDetailHeader.vue";
+import SessionDetailStateCard from "../components/session/SessionDetailStateCard.vue";
+import SessionMetadataCard from "../components/session/SessionMetadataCard.vue";
+import SessionPromptsCard from "../components/session/SessionPromptsCard.vue";
 import { useSessionPrompts } from "../composables/useSessionPrompts";
 import { useSessionStore } from "../composables/useSessionStore";
 
@@ -12,6 +15,9 @@ const store = useSessionStore();
 
 const sessionId = computed(() => String(route.params.sessionId ?? ""));
 const session = computed(() => store.getSessionById(sessionId.value));
+const activeSession = computed(
+  () => session.value as NonNullable<typeof session.value>,
+);
 const previewEntries = computed(() => session.value?.contentPreview ?? []);
 const selected = computed(() => {
   const currentSession = session.value;
@@ -30,6 +36,12 @@ const {
   promptEntriesWarnings,
 } = useSessionPrompts(sessionId, previewEntries);
 
+const hasError = computed(() => Boolean(store.errorMessage) && !session.value);
+const isLoading = computed(() => store.loading && !session.value);
+const isMissing = computed(
+  () => !session.value && !hasError.value && !isLoading.value,
+);
+
 function goBack(): void {
   void router.push({ name: "session-list" });
 }
@@ -40,50 +52,52 @@ function requestDelete(targetSessionId: string): void {
 </script>
 
 <template>
-  <StatePanel v-if="store.errorMessage && !session" eyebrow="Load Failed" title="The session detail could not be loaded"
-    tone="error">
-    {{ store.errorMessage }}
-    <template #actions>
-      <button class="ui-button" type="button" @click="store.refreshSessions">
-        Retry
-      </button>
-      <button class="ui-button ui-button--ghost" type="button" @click="goBack">
-        Back to List
-      </button>
-    </template>
-  </StatePanel>
+  <SessionDetailStateCard
+    v-if="hasError"
+    state="error"
+    :error-message="store.errorMessage"
+    @retry="store.refreshSessions"
+    @back="goBack"
+  />
 
-  <StatePanel v-else-if="store.loading && !session" eyebrow="Loading" title="Preparing the session detail page">
-    Waiting for the session index to finish loading before opening this record.
-  </StatePanel>
+  <SessionDetailStateCard
+    v-else-if="isLoading"
+    state="loading"
+    @retry="store.refreshSessions"
+    @back="goBack"
+  />
 
-  <StatePanel v-else-if="!session" eyebrow="Missing" title="This session is no longer available">
-    It may have been deleted or the local index changed. Return to the list and
-    pick another session.
-    <template #actions>
-      <button class="ui-button ui-button--ghost" type="button" @click="goBack">
-        Back to List
-      </button>
-      <button class="ui-button ui-button--ghost" type="button" @click="store.refreshSessions">
-        Refresh Index
-      </button>
-    </template>
-  </StatePanel>
+  <SessionDetailStateCard
+    v-else-if="isMissing"
+    state="missing"
+    @retry="store.refreshSessions"
+    @back="goBack"
+  />
 
-  <section v-else class="detail-page">
-    <SessionDetail :session="session" :selected="selected" :selection-disabled="store.isDeleting"
-      :loading="store.loading" :delete-disabled="store.isDeleting" :is-deleting="isDeletingCurrent"
-      @go-back="goBack" @refresh="store.refreshSessions" @toggle-select="store.toggleSessionSelection"
-      :prompt-entries="promptEntries" :prompt-entries-loading="promptEntriesLoading"
-      :prompt-entries-error="promptEntriesError" :prompt-entries-warnings="promptEntriesWarnings"
-      @request-delete="requestDelete" />
-  </section>
+  <template v-else>
+    <n-flex vertical style="flex: 1; min-height: 0; gap: 16px; overflow: hidden;">
+      <SessionDetailHeader
+        style="flex-shrink: 0;"
+        :selected="selected"
+        :is-deleting-current="isDeletingCurrent"
+        :is-deleting="store.isDeleting"
+        :loading="store.loading"
+        @back="goBack"
+        @toggle-selection="store.toggleSessionSelection(activeSession.id)"
+        @delete="requestDelete(activeSession.id)"
+        @refresh="store.refreshSessions"
+      />
+
+      <SessionMetadataCard style="flex-shrink: 0;" :session="activeSession" />
+
+      <SessionPromptsCard
+        style="flex: 1; min-height: 0;"
+        :session-id="activeSession.id"
+        :prompt-entries="promptEntries"
+        :prompt-entries-loading="promptEntriesLoading"
+        :prompt-entries-error="promptEntriesError"
+        :prompt-entries-warnings="promptEntriesWarnings"
+      />
+    </n-flex>
+  </template>
 </template>
-
-<style scoped>
-.detail-page {
-  display: grid;
-  height: 100%;
-  min-height: 0;
-}
-</style>

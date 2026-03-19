@@ -1,8 +1,7 @@
 {
-  "name": "ccsession",
-  "description": "A Tauri app to clear codex sessions.",
+  "name": "io.toys.ccsession",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,14 +11,16 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",
+    "naive-ui": "^2.44.1",
     "vue": "^3.5.13",
     "vue-router": "^4"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2",
     "@vitejs/plugin-vue": "^5.2.1",
     "typescript": "~5.6.2",
     "vite": "^6.0.3",
-    "vue-tsc": "^2.1.10",
-    "@tauri-apps/cli": "^2"
+    "vite-plugin-vue-devtools": "^8.1.0",
+    "vue-tsc": "^2.1.10"
   }
 }

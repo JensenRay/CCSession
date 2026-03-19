@@ -3,7 +3,6 @@ export type ApiErrorCode =
   | "state_db_open_failed"
   | "state_db_query_failed"
   | "logs_db_open_failed"
-  | "logs_db_query_failed"
   | "history_file_read_failed"
   | "history_file_write_failed"
   | "codex_running_detected"
@@ -36,7 +35,6 @@ export type SessionPromptsRequest = {
 
 export type SessionListItem = {
   id: string;
-  title: string;
   summary: string;
   contentPreview: string[];
   cwd: string;
@@ -46,10 +44,6 @@ export type SessionListItem = {
   archived: boolean;
   source: string;
   modelProvider: string;
-  hasRollout: boolean;
-  hasSnapshot: boolean;
-  historyCount: number;
-  structuredLogCount: number;
 };
 
 export type ListSessionsData = {

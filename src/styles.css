@@ -1,125 +1,13 @@
-:root {
-  color-scheme: dark;
-  font-family:
-    "Avenir Next",
-    "Trebuchet MS",
-    "PingFang SC",
-    "Microsoft YaHei",
-    sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  --bg: #06110c;
-  --bg-strong: #0a1b15;
-  --panel: #0d2119;
-  --panel-strong: #15332a;
-  --border: rgba(112, 193, 174, 0.18);
-  --heading: #f8f6df;
-  --text: #d4dfd8;
-  --text-soft: #a9c0b5;
-  --text-muted: #7f9c91;
-  --accent: #ffc947;
-  --accent-strong: #d19c20;
-  --accent-soft: #37c1da;
-  --danger: #ff7b5c;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
-}
-
 html,
 body,
 #app {
-  height: 100dvh;
-  min-height: 100dvh;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
 }
 
 body {
-  margin: 0;
   min-width: 320px;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at top left, rgba(55, 193, 218, 0.12), transparent 28%),
-    radial-gradient(circle at top right, rgba(255, 201, 71, 0.12), transparent 24%),
-    linear-gradient(180deg, #07120d 0%, #0a1812 42%, #09110f 100%);
-  color: var(--text);
-}
-
-button,
-input,
-textarea,
-select {
-  font: inherit;
-}
-
-button {
-  cursor: pointer;
-}
-
-button,
-input {
-  accent-color: var(--accent);
-}
-
-code {
-  font-family:
-    ui-monospace,
-    "SFMono-Regular",
-    Menlo,
-    Monaco,
-    Consolas,
-    "Liberation Mono",
-    monospace;
-}
-
-.ui-button {
-  min-height: 2.9rem;
-  padding: 0 1.1rem;
-  border: none;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent-soft), #0b93ab);
-  color: #05110d;
-  font-weight: 800;
-  transition:
-    transform 150ms ease,
-    box-shadow 150ms ease,
-    opacity 150ms ease,
-    background 150ms ease,
-    color 150ms ease,
-    border-color 150ms ease;
-}
-
-.ui-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 16px 32px rgba(55, 193, 218, 0.2);
-}
-
-.ui-button:disabled {
-  opacity: 0.45;
-  cursor: wait;
-  transform: none;
-  box-shadow: none;
-}
-
-.ui-button--ghost {
-  border: 1px solid rgba(112, 193, 174, 0.12);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--heading);
-}
-
-.ui-button--ghost:hover {
-  box-shadow: 0 16px 32px rgba(1, 8, 6, 0.18);
-}
-
-.ui-button--danger {
-  background: linear-gradient(135deg, var(--accent), #ffb114);
-}
-
-::selection {
-  background: rgba(255, 201, 71, 0.28);
-  color: var(--heading);
+  overscroll-behavior: none;
 }

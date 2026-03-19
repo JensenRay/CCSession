@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "mainBinaryName" : "CCSession",
+  "mainBinaryName": "CCSession",
   "productName": "CCSession",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "identifier": "io.toys.ccsession",
   "build": {
     "beforeDevCommand": "bun run dev",

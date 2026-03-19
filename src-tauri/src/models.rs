@@ -37,7 +37,6 @@ pub enum ApiErrorCode {
     StateDbOpenFailed,
     StateDbQueryFailed,
     LogsDbOpenFailed,
-    LogsDbQueryFailed,
     HistoryFileReadFailed,
     HistoryFileWriteFailed,
     CodexRunningDetected,
@@ -105,7 +104,6 @@ pub struct SessionPromptsData {
 #[serde(rename_all = "camelCase")]
 pub struct SessionListItem {
     pub id: String,
-    pub title: String,
     pub summary: String,
     pub content_preview: Vec<String>,
     pub cwd: String,
@@ -115,10 +113,6 @@ pub struct SessionListItem {
     pub archived: bool,
     pub source: String,
     pub model_provider: String,
-    pub has_rollout: bool,
-    pub has_snapshot: bool,
-    pub history_count: usize,
-    pub structured_log_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]

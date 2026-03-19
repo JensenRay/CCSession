@@ -90,6 +90,7 @@ pub fn create_test_codex_root() -> TestCodexRoot {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn insert_thread(
     fixture: &TestCodexRoot,
     session_id: &str,
